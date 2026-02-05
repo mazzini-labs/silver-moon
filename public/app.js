@@ -167,6 +167,7 @@ function syncMeshes() {
   }
   for (const [id, mesh] of ghostMeshes.entries()) if (!state.server.ghosts.some((g) => g.id === id)) { scene.remove(mesh); ghostMeshes.delete(id); }
 
+  // room-to-room shift only
   const roomShift = state.server.roomIndex * 4;
   camera.position.set(10 + roomShift, 13, 10 + roomShift);
   camera.lookAt(roomShift, 0, roomShift);
@@ -177,15 +178,10 @@ function renderHUD() {
   if (!state.server) return;
   partyEl.innerHTML = `<b>Party (${state.server.players.length}/8)</b><br>` + state.server.players.map((p) => `${p.name} HP:${Math.round(p.hp)} Djinn:${p.djinn.filter((d)=>d.state==='set').length}/${p.djinn.length}`).join('<br>');
   hotbarEl.innerHTML = verbs.map((v, i) => `<span ${i===state.verbIndex?'style="color:#00ffcc"':''}>[${i+1}] ${v}</span>`).join(' | ');
-
-  const objectiveLine = state.server.roomIndex < 2
-    ? `Contribute to room seals (${state.server.objectiveProgress}/${state.server.objectiveRequired}).`
-    : `Charge boss seals asynchronously (${state.server.bossCharge}/${state.server.bossChargeRequired}) then fire spotlight verbs.`;
-
-  hintEl.innerHTML = `<b>Objective hints</b><br>${objectiveLine}<br>Ping: middle-click mark target/danger/go here.`;
-  bossEl.innerHTML = `<b>Boss phase</b><br>Phase ${state.server.bossPhase + 1} HP ${state.server.bossHP}<br>Spotlight: ${(state.server.bossSpotlightVerbs || []).join(', ')}`;
+  hintEl.innerHTML = `<b>Objective hints</b><br>Contribute to room seals (${state.server.objectiveProgress}/${state.server.objectiveRequired}).<br>Ping: middle-click mark target/danger/go here.`;
+  bossEl.innerHTML = `<b>Boss phase</b><br>Phase ${state.server.bossPhase + 1} HP ${state.server.bossHP}`;
   minimapEl.innerHTML = `Dungeon ${state.server.dungeonId}<br>Room ${state.server.roomIndex + 1}/3`;
-  debugEl.innerHTML = `<b>Debug overlay</b><br>Tick:${state.server.tick}<br>Traces:${state.server.traces.map((t)=>t.verb||t.summon||'boss-charge').join(', ')}<br>Replay log:${state.replayLog.slice(-5).join(' | ')}`;
+  debugEl.innerHTML = `<b>Debug overlay</b><br>Tick:${state.server.tick}<br>Traces:${state.server.traces.map((t)=>t.verb||t.summon).join(', ')}<br>Replay log:${state.replayLog.slice(-5).join(' | ')}`;
 }
 
 function sendInput(payload) {
@@ -204,21 +200,11 @@ window.addEventListener('keydown', (e) => {
   const dirs = { w: 'up', a: 'left', s: 'down', d: 'right' };
   if (dirs[e.key]) sendInput({ type: 'move', dir: dirs[e.key], buffer: [dirs[e.key]] });
   const idx = Number(e.key) - 1;
-  if (idx >= 0 && idx < 8) {
-    state.verbIndex = idx;
-    sendInput({ type: 'verb', verb: verbs[idx], cell: [Math.round(preview.position.x), Math.round(preview.position.z)] });
-  }
+  if (idx >= 0 && idx < 8) { state.verbIndex = idx; sendInput({ type: 'verb', verb: verbs[idx], cell: [Math.round(preview.position.x), Math.round(preview.position.z)] }); }
   if (e.key.toLowerCase() === 'q') sendInput({ type: 'djinn', id: state.selectedDjinn[0] });
   if (e.key.toLowerCase() === 'e') sendInput({ type: 'summon', id: state.content.summons[0].id });
   if (e.key.toLowerCase() === 'f') sendInput({ type: 'contribute' });
-  if (e.key.toLowerCase() === 'z') {
-    currentZoom = (currentZoom + 1) % cameraZoomLevels.length;
-    camera.left = -cameraZoomLevels[currentZoom];
-    camera.right = cameraZoomLevels[currentZoom];
-    camera.top = cameraZoomLevels[currentZoom];
-    camera.bottom = -cameraZoomLevels[currentZoom];
-    camera.updateProjectionMatrix();
-  }
+  if (e.key.toLowerCase() === 'z') { currentZoom = (currentZoom + 1) % cameraZoomLevels.length; camera.left = -cameraZoomLevels[currentZoom]; camera.right = cameraZoomLevels[currentZoom]; camera.top = cameraZoomLevels[currentZoom]; camera.bottom = -cameraZoomLevels[currentZoom]; camera.updateProjectionMatrix(); }
 });
 
 window.addEventListener('mousemove', (e) => {

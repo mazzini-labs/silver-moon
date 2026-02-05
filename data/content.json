@@ -1,0 +1,85 @@
+{
+  "tileSize": 1,
+  "verbs": [
+    "push_pull",
+    "lift_throw",
+    "pound",
+    "freeze",
+    "growth",
+    "tether",
+    "reveal",
+    "swap"
+  ],
+  "characters": [
+    {"id":"c1","name":"Ember Reeve","element":"mars","weapon":"axe","stats":{"hp":120,"atk":14,"focus":8,"speed":4},"aiTendency":"aggressive-anchor"},
+    {"id":"c2","name":"Cinder Vale","element":"mars","weapon":"rod","stats":{"hp":100,"atk":10,"focus":13,"speed":5},"aiTendency":"ranged-pressure"},
+    {"id":"c3","name":"Garn Tor","element":"venus","weapon":"mace","stats":{"hp":130,"atk":12,"focus":9,"speed":3},"aiTendency":"guardian"},
+    {"id":"c4","name":"Luma Thorne","element":"venus","weapon":"wand","stats":{"hp":95,"atk":9,"focus":14,"speed":5},"aiTendency":"objective-solver"},
+    {"id":"c5","name":"Rill Cairn","element":"mercury","weapon":"morningstar","stats":{"hp":110,"atk":11,"focus":11,"speed":4},"aiTendency":"control-support"},
+    {"id":"c6","name":"Mirel Quill","element":"mercury","weapon":"staff","stats":{"hp":90,"atk":8,"focus":15,"speed":5},"aiTendency":"freeze-priority"},
+    {"id":"c7","name":"Zeph Rune","element":"jupiter","weapon":"stave","stats":{"hp":98,"atk":9,"focus":14,"speed":6},"aiTendency":"roam-assist"},
+    {"id":"c8","name":"Skye Brand","element":"jupiter","weapon":"blade","stats":{"hp":108,"atk":12,"focus":10,"speed":6},"aiTendency":"hazard-flanker"}
+  ],
+  "djinn": {
+    "mars": [
+      {"id":"m1","name":"Cinder","passive":"+atk","active":"Flare Link"},
+      {"id":"m2","name":"Pyre","passive":"+burn resist","active":"Heat Line"},
+      {"id":"m3","name":"Coal","passive":"+hp","active":"Smolder Guard"},
+      {"id":"m4","name":"Ash","passive":"+revive speed","active":"Blaze Dash"},
+      {"id":"m5","name":"Brand","passive":"+verb power","active":"Scorch Sigil"},
+      {"id":"m6","name":"Rift","passive":"+throw force","active":"Magma Pull"},
+      {"id":"m7","name":"Kiln","passive":"+downed armor","active":"Lava Pound"},
+      {"id":"m8","name":"Spark","passive":"+cooldown cut","active":"Ignite Relay"}
+    ],
+    "venus": [
+      {"id":"v1","name":"Root","passive":"+def","active":"Stone Skin"},
+      {"id":"v2","name":"Loam","passive":"+heal received","active":"Earthen Band"},
+      {"id":"v3","name":"Moss","passive":"+puzzle tolerance","active":"Stabilize"},
+      {"id":"v4","name":"Crag","passive":"+push weight","active":"Boulder Step"},
+      {"id":"v5","name":"Bramble","passive":"+growth range","active":"Vine Cage"},
+      {"id":"v6","name":"Shale","passive":"+stagger resist","active":"Pillar Lift"},
+      {"id":"v7","name":"Silt","passive":"+loot yield","active":"Seismic Ping"},
+      {"id":"v8","name":"Basil","passive":"+checkpoint grace","active":"Verdant Pulse"}
+    ],
+    "mercury": [
+      {"id":"u1","name":"Rime","passive":"+mana","active":"Ice Tile"},
+      {"id":"u2","name":"Flow","passive":"+range","active":"Current Swap"},
+      {"id":"u3","name":"Mist","passive":"+stealth vs hazards","active":"Fog Veil"},
+      {"id":"u4","name":"Frost","passive":"+freeze duration","active":"Crystal Lock"},
+      {"id":"u5","name":"Tide","passive":"+revive charge","active":"Surge Anchor"},
+      {"id":"u6","name":"Glint","passive":"+hint clarity","active":"Mirror Reveal"},
+      {"id":"u7","name":"Drift","passive":"+move forgiveness","active":"Slipstream"},
+      {"id":"u8","name":"Nix","passive":"+cooldown recov","active":"Snowbound"}
+    ],
+    "jupiter": [
+      {"id":"j1","name":"Gale","passive":"+speed","active":"Wind Tether"},
+      {"id":"j2","name":"Volt","passive":"+stun break","active":"Chain Arc"},
+      {"id":"j3","name":"Pulse","passive":"+ping radius","active":"Static Mark"},
+      {"id":"j4","name":"Skirl","passive":"+swap distance","active":"Tempest Swap"},
+      {"id":"j5","name":"Nimbus","passive":"+shield regen","active":"Cloud Step"},
+      {"id":"j6","name":"Rook","passive":"+crit chance","active":"Storm Dive"},
+      {"id":"j7","name":"Whorl","passive":"+boss clue","active":"Eye of Air"},
+      {"id":"j8","name":"Kite","passive":"+interact speed","active":"Tailwind"}
+    ]
+  },
+  "summons": [
+    {"id":"s1","element":"mars","name":"Ifrit Shard","costStandby":4,"effect":"high burst line"},
+    {"id":"s2","element":"mars","name":"Meteor Pup","costStandby":8,"effect":"arena melt phase"},
+    {"id":"s3","element":"venus","name":"Gaia Hand","costStandby":4,"effect":"fortify + crush"},
+    {"id":"s4","element":"venus","name":"Titan Knot","costStandby":8,"effect":"boss bind"},
+    {"id":"s5","element":"mercury","name":"Nereid Ring","costStandby":4,"effect":"freeze wave"},
+    {"id":"s6","element":"mercury","name":"Levi Coil","costStandby":8,"effect":"flood reshape"},
+    {"id":"s7","element":"jupiter","name":"Sylph Bolt","costStandby":4,"effect":"telegraph clear"},
+    {"id":"s8","element":"jupiter","name":"Thor Echo","costStandby":8,"effect":"multi-node stun"}
+  ],
+  "dungeons": [
+    {"id":"d1","name":"Basalt Gate","tags":["solo","coupled","distributed"],"boss":"Crucible Warden","verbs":["push_pull","pound","reveal"]},
+    {"id":"d2","name":"Verdigris Vault","tags":["solo","coupled","distributed"],"boss":"Ivy Colossus","verbs":["growth","lift_throw","tether"]},
+    {"id":"d3","name":"Glass Tides","tags":["solo","coupled","distributed"],"boss":"Abyss Lens","verbs":["freeze","swap","reveal"]},
+    {"id":"d4","name":"Storm Loom","tags":["solo","coupled","distributed"],"boss":"Tempest Loomer","verbs":["tether","push_pull","swap"]},
+    {"id":"d5","name":"Hollow Kiln","tags":["solo","coupled","distributed"],"boss":"Ember Regent","verbs":["pound","lift_throw","growth"]},
+    {"id":"d6","name":"Moonwell Archive","tags":["solo","coupled","distributed"],"boss":"Script Seraph","verbs":["reveal","freeze","tether"]},
+    {"id":"d7","name":"Windscar Keep","tags":["solo","coupled","distributed"],"boss":"Blade Cyclone","verbs":["swap","push_pull","growth"]},
+    {"id":"d8","name":"Silver Core","tags":["solo","coupled","distributed"],"boss":"Lunarch Automaton","verbs":["lift_throw","pound","freeze"]}
+  ]
+}

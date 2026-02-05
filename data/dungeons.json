@@ -1,0 +1,22 @@
+{
+  "dungeons": [
+    {"id":"d1","rooms":[{"id":"r1","size":[12,12],"checkpoint":true,"objectives":[{"id":"o1","type":"contribute","required":2,"progress":0}],"puzzleTag":"solo"},{"id":"r2","size":[12,12],"checkpoint":true,"objectives":[{"id":"o2","type":"contribute","required":3,"progress":0}],"puzzleTag":"coupled"},{"id":"boss","size":[14,14],"checkpoint":true,"boss":"b1","puzzleTag":"distributed"}]},
+    {"id":"d2","rooms":[{"id":"r1","size":[12,12],"checkpoint":true,"objectives":[{"id":"o1","type":"contribute","required":2,"progress":0}],"puzzleTag":"solo"},{"id":"r2","size":[12,12],"checkpoint":true,"objectives":[{"id":"o2","type":"contribute","required":3,"progress":0}],"puzzleTag":"coupled"},{"id":"boss","size":[14,14],"checkpoint":true,"boss":"b2","puzzleTag":"distributed"}]},
+    {"id":"d3","rooms":[{"id":"r1","size":[12,12],"checkpoint":true,"objectives":[{"id":"o1","type":"contribute","required":2,"progress":0}],"puzzleTag":"solo"},{"id":"r2","size":[12,12],"checkpoint":true,"objectives":[{"id":"o2","type":"contribute","required":3,"progress":0}],"puzzleTag":"coupled"},{"id":"boss","size":[14,14],"checkpoint":true,"boss":"b3","puzzleTag":"distributed"}]},
+    {"id":"d4","rooms":[{"id":"r1","size":[12,12],"checkpoint":true,"objectives":[{"id":"o1","type":"contribute","required":2,"progress":0}],"puzzleTag":"solo"},{"id":"r2","size":[12,12],"checkpoint":true,"objectives":[{"id":"o2","type":"contribute","required":3,"progress":0}],"puzzleTag":"coupled"},{"id":"boss","size":[14,14],"checkpoint":true,"boss":"b4","puzzleTag":"distributed"}]},
+    {"id":"d5","rooms":[{"id":"r1","size":[12,12],"checkpoint":true,"objectives":[{"id":"o1","type":"contribute","required":2,"progress":0}],"puzzleTag":"solo"},{"id":"r2","size":[12,12],"checkpoint":true,"objectives":[{"id":"o2","type":"contribute","required":3,"progress":0}],"puzzleTag":"coupled"},{"id":"boss","size":[14,14],"checkpoint":true,"boss":"b5","puzzleTag":"distributed"}]},
+    {"id":"d6","rooms":[{"id":"r1","size":[12,12],"checkpoint":true,"objectives":[{"id":"o1","type":"contribute","required":2,"progress":0}],"puzzleTag":"solo"},{"id":"r2","size":[12,12],"checkpoint":true,"objectives":[{"id":"o2","type":"contribute","required":3,"progress":0}],"puzzleTag":"coupled"},{"id":"boss","size":[14,14],"checkpoint":true,"boss":"b6","puzzleTag":"distributed"}]},
+    {"id":"d7","rooms":[{"id":"r1","size":[12,12],"checkpoint":true,"objectives":[{"id":"o1","type":"contribute","required":2,"progress":0}],"puzzleTag":"solo"},{"id":"r2","size":[12,12],"checkpoint":true,"objectives":[{"id":"o2","type":"contribute","required":3,"progress":0}],"puzzleTag":"coupled"},{"id":"boss","size":[14,14],"checkpoint":true,"boss":"b7","puzzleTag":"distributed"}]},
+    {"id":"d8","rooms":[{"id":"r1","size":[12,12],"checkpoint":true,"objectives":[{"id":"o1","type":"contribute","required":2,"progress":0}],"puzzleTag":"solo"},{"id":"r2","size":[12,12],"checkpoint":true,"objectives":[{"id":"o2","type":"contribute","required":3,"progress":0}],"puzzleTag":"coupled"},{"id":"boss","size":[14,14],"checkpoint":true,"boss":"b8","puzzleTag":"distributed"}]}
+  ],
+  "bosses": [
+    {"id":"b1","name":"Crucible Warden","verbs":["push_pull","pound","reveal"],"phases":[{"hp":100,"objectives":1},{"hp":100,"objectives":2}]},
+    {"id":"b2","name":"Ivy Colossus","verbs":["growth","lift_throw","tether"],"phases":[{"hp":100,"objectives":1},{"hp":100,"objectives":2}]},
+    {"id":"b3","name":"Abyss Lens","verbs":["freeze","swap","reveal"],"phases":[{"hp":100,"objectives":1},{"hp":100,"objectives":2}]},
+    {"id":"b4","name":"Tempest Loomer","verbs":["tether","push_pull","swap"],"phases":[{"hp":100,"objectives":1},{"hp":100,"objectives":2}]},
+    {"id":"b5","name":"Ember Regent","verbs":["pound","lift_throw","growth"],"phases":[{"hp":100,"objectives":1},{"hp":100,"objectives":2}]},
+    {"id":"b6","name":"Script Seraph","verbs":["reveal","freeze","tether"],"phases":[{"hp":100,"objectives":1},{"hp":100,"objectives":2}]},
+    {"id":"b7","name":"Blade Cyclone","verbs":["swap","push_pull","growth"],"phases":[{"hp":100,"objectives":1},{"hp":100,"objectives":2}]},
+    {"id":"b8","name":"Lunarch Automaton","verbs":["lift_throw","pound","freeze"],"phases":[{"hp":100,"objectives":1},{"hp":100,"objectives":2}]}
+  ]
+}

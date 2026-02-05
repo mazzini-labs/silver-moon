@@ -1,0 +1,56 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Silver Moon</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="ui">
+    <div id="screen-play" class="screen active">
+      <h1>Silver Moon</h1>
+      <button data-mode="solo">Play Solo</button>
+      <button data-mode="host">Host</button>
+      <input id="joinCode" placeholder="Room code" />
+      <button data-mode="join">Join</button>
+    </div>
+    <div id="screen-setup" class="screen">
+      <h2>Dungeon Select (8 unlocked)</h2>
+      <select id="dungeonSelect"></select>
+      <h2>Loadout</h2>
+      <select id="avatarSelect"></select>
+      <select id="djinnSelect" multiple size="8"></select>
+      <div>Keybinds: WASD move, 1-8 verbs, Q djinn, E summon, F contribute, Y confirm demo, Esc pause</div>
+      <h2>Difficulty</h2>
+      <select id="difficultySelect">
+        <option>relaxed</option><option selected>standard</option><option>harsh</option>
+      </select>
+      <button id="startBtn">Start Dungeon Run</button>
+      <button id="optionsBtn">Options</button>
+    </div>
+    <div id="screen-options" class="screen">
+      <h2>Options</h2>
+      <label>Master Volume <input type="range" min="0" max="100" value="70" /></label>
+      <label>Ping Color <input type="color" value="#00ffcc" /></label>
+      <button id="closeOptions">Back</button>
+    </div>
+    <div id="hud" class="hidden">
+      <div id="party"></div>
+      <div id="hotbar"></div>
+      <div id="hintLog"></div>
+      <div id="bossWidget"></div>
+      <div id="minimap"></div>
+      <div id="debug"></div>
+      <div id="pauseMenu" class="hidden">
+        <button data-pause="resume">Resume</button>
+        <button data-pause="restart-room">Restart Room</button>
+        <button data-pause="abandon-run">Abandon Run</button>
+      </div>
+      <div id="confirmOverlay" class="confirm-overlay hidden"></div>
+    </div>
+  </div>
+  <canvas id="game"></canvas>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

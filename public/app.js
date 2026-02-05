@@ -72,9 +72,7 @@ class ConfirmChoiceOverlay {
     });
   }
 
-  isOpen() {
-    return this.opened;
-  }
+  isOpen() { return this.opened; }
 
   tone(freq, durationMs) {
     if (!this.audioCtx) this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -141,8 +139,7 @@ class ConfirmChoiceOverlay {
   confirm(index) {
     if (!this.opened) return;
     this.playConfirm();
-    const decision = index === 0;
-    this.close(decision);
+    this.close(index === 0);
   }
 
   cancel() {
@@ -164,8 +161,7 @@ function show(name) {
 }
 
 function buildPortraitFactory(characters) {
-  // Placeholder 24x24 portraits generated in code.
-  // Replace this with authored sprite assets later (e.g. /public/sprites/portraits.png + UV map).
+  // Temporary 24x24 placeholders. Replace with authored sprite sheet at /public/sprites/portraits.png.
   const byId = new Map();
   const palette = ['#cc6655', '#f0b84a', '#66b3d9', '#82d17a', '#8a78d8', '#d96fb8', '#73d9c1', '#d9d56f'];
 
@@ -175,7 +171,6 @@ function buildPortraitFactory(characters) {
     c.height = 24;
     const ctx = c.getContext('2d', { alpha: true });
     ctx.imageSmoothingEnabled = false;
-    const color = palette[i % palette.length];
 
     ctx.fillStyle = '#111';
     ctx.fillRect(0, 0, 24, 24);
@@ -183,7 +178,7 @@ function buildPortraitFactory(characters) {
     ctx.fillRect(1, 1, 22, 22);
     ctx.fillStyle = '#f2d7b0';
     ctx.fillRect(6, 5, 12, 10);
-    ctx.fillStyle = color;
+    ctx.fillStyle = palette[i % palette.length];
     ctx.fillRect(4, 3, 16, 5);
     ctx.fillRect(6, 15, 12, 6);
     ctx.fillStyle = '#000';
@@ -193,7 +188,7 @@ function buildPortraitFactory(characters) {
     byId.set(characters[i].id, c.toDataURL());
   }
 
-  const yesNoTint = (base, mode) => {
+  const tint = (base, mode) => {
     const c = document.createElement('canvas');
     c.width = 24;
     c.height = 24;
@@ -211,7 +206,7 @@ function buildPortraitFactory(characters) {
 
   return (characterId, mode) => {
     const base = byId.get(characterId) || [...byId.values()][0];
-    return yesNoTint(base, mode);
+    return tint(base, mode);
   };
 }
 
@@ -259,46 +254,108 @@ for (const btn of document.querySelectorAll('[data-mode]')) {
 document.getElementById('optionsBtn').onclick = () => show('options');
 document.getElementById('closeOptions').onclick = () => show('setup');
 
+// --- Three.js renderer and Golden-Sun-style oblique perspective camera ---
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
+
 const scene = new THREE.Scene();
-scene.background = new THREE.Color('#283049');
+scene.background = new THREE.Color('#2a3550');
 
-const cameraZoomLevels = [11, 14, 18];
-let currentZoom = 1;
-const camera = new THREE.OrthographicCamera(-cameraZoomLevels[currentZoom], cameraZoomLevels[currentZoom], cameraZoomLevels[currentZoom], -cameraZoomLevels[currentZoom], 0.1, 100);
-camera.position.set(10, 13, 10);
-camera.lookAt(0, 0, 0);
+const CAMERA_FOV = 33;
+const CAMERA_PITCH_DEG = 40;
+const CAMERA_YAW_DEG = 50; // 45 + 5 axis bias (intentionally non-symmetric)
+const CAMERA_DISTANCE = 23;
+const camera = new THREE.PerspectiveCamera(CAMERA_FOV, window.innerWidth / window.innerHeight, 0.1, 150);
 
-scene.add(new THREE.AmbientLight(0xffffff, 0.9));
-const dir = new THREE.DirectionalLight(0xffffff, 0.6);
-dir.position.set(6, 10, 4);
+function updateCameraForRoom(roomCenterX, roomCenterZ) {
+  const pitch = THREE.MathUtils.degToRad(CAMERA_PITCH_DEG);
+  const yaw = THREE.MathUtils.degToRad(CAMERA_YAW_DEG);
+  const horizontal = CAMERA_DISTANCE * Math.cos(pitch);
+  const y = CAMERA_DISTANCE * Math.sin(pitch);
+  const x = roomCenterX + horizontal * Math.sin(yaw);
+  const z = roomCenterZ + horizontal * Math.cos(yaw);
+  camera.position.set(x, y, z);
+  camera.lookAt(roomCenterX, 1.2, roomCenterZ);
+  camera.rotation.z = 0; // no roll
+}
+updateCameraForRoom(0, 0);
+
+// Flat lighting only
+scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+const dir = new THREE.DirectionalLight(0xffffff, 0.62);
+dir.position.set(8, 14, 6);
 scene.add(dir);
 
-const matGround = new THREE.MeshLambertMaterial({ color: '#5d6b7f' });
+const matGround = new THREE.MeshLambertMaterial({ color: '#5f6f84' });
+const matPath = new THREE.MeshLambertMaterial({ color: '#6f7f95' });
 const matWall = new THREE.MeshLambertMaterial({ color: '#3a4254', transparent: true, opacity: 1 });
+const matHouse = new THREE.MeshLambertMaterial({ color: '#76869e' });
+const matRoof = new THREE.MeshLambertMaterial({ color: '#9f4b42', transparent: true, opacity: 1 });
+const matDoor = new THREE.MeshLambertMaterial({ color: '#3b2b24' });
 const matPlayer = new THREE.MeshLambertMaterial({ color: '#ffcc66' });
 const matGhost = new THREE.MeshLambertMaterial({ color: '#96a7ff' });
 const matPreview = new THREE.MeshBasicMaterial({ color: '#00ffcc', wireframe: true });
 
-const grid = new THREE.Group();
-scene.add(grid);
+const world = new THREE.Group();
+scene.add(world);
 const walls = [];
-for (let x = -6; x <= 6; x += 1) {
-  for (let y = -6; y <= 6; y += 1) {
-    const tile = new THREE.Mesh(new THREE.BoxGeometry(1, 0.1, 1), matGround);
-    tile.position.set(x, -0.05, y);
-    grid.add(tile);
-    if ((Math.abs(x) === 6 || Math.abs(y) === 6) && (x + y) % 2 === 0) {
-      const wall = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), matWall.clone());
-      wall.position.set(x, 1, y);
+const roofs = [];
+
+for (let x = -7; x <= 7; x += 1) {
+  for (let z = -7; z <= 7; z += 1) {
+    const tileMat = (Math.abs(x - z) <= 1) ? matPath : matGround;
+    const tile = new THREE.Mesh(new THREE.BoxGeometry(1, 0.1, 1), tileMat);
+    tile.position.set(x, -0.05, z);
+    world.add(tile);
+
+    if ((Math.abs(x) === 7 || Math.abs(z) === 7) && (x + z) % 2 === 0) {
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(1, 2.3, 1), matWall.clone());
+      wall.position.set(x, 1.1, z);
       walls.push(wall);
-      grid.add(wall);
+      world.add(wall);
     }
   }
 }
+
+function createDioramaBuilding(cfg) {
+  const { x, z, w, d, h, roofH } = cfg;
+  const building = new THREE.Group();
+  building.position.set(x, 0, z);
+
+  const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), matHouse);
+  body.position.set(0, h / 2, 0);
+
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 0.7, roofH, d + 0.9), matRoof.clone());
+  roof.position.set(0, h + roofH / 2, 0);
+
+  // chunkier, non-uniform prop scaling and compressed interior feel
+  body.scale.set(1.15, 0.82, 1.35);
+  roof.scale.set(1.22, 1.45, 1.38);
+
+  const door = new THREE.Mesh(new THREE.BoxGeometry(0.65, 1.1, 0.12), matDoor);
+  // diagonal arrangement with readable entrance from fixed oblique camera
+  door.position.set(-w * 0.18, 0.55, d * 0.52);
+
+  building.add(body, roof, door);
+  world.add(building);
+
+  roofs.push({
+    mesh: roof,
+    footprint: {
+      minX: x - (w * 0.75),
+      maxX: x + (w * 0.75),
+      minZ: z - (d * 0.75),
+      maxZ: z + (d * 0.75)
+    }
+  });
+}
+
+createDioramaBuilding({ x: -4.2, z: -2.6, w: 2.5, d: 1.7, h: 1.8, roofH: 0.7 });
+createDioramaBuilding({ x: -1.0, z: 0.6, w: 2.3, d: 1.6, h: 1.7, roofH: 0.65 });
+createDioramaBuilding({ x: 2.2, z: 3.1, w: 2.7, d: 1.9, h: 1.9, roofH: 0.75 });
+createDioramaBuilding({ x: 4.8, z: -0.4, w: 2.4, d: 1.8, h: 1.8, roofH: 0.72 });
 
 const playerMeshes = new Map();
 const ghostMeshes = new Map();
@@ -306,15 +363,26 @@ const preview = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), matPreview);
 preview.position.set(0, 0.5, 0);
 scene.add(preview);
 
-function applyOcclusionFade() {
-  const ray = new THREE.Raycaster(camera.position, new THREE.Vector3(-1, -1, -1).normalize());
+function applyOcclusionDiscipline() {
+  const ray = new THREE.Raycaster();
   for (const wall of walls) wall.material.opacity = 1;
+  for (const roof of roofs) roof.mesh.material.opacity = 1;
+
+  const localPlayer = state.server?.players?.find((p) => p.id === state.playerId);
+  if (localPlayer) {
+    for (const roof of roofs) {
+      const f = roof.footprint;
+      const inside = localPlayer.x >= f.minX && localPlayer.x <= f.maxX && localPlayer.y >= f.minZ && localPlayer.y <= f.maxZ;
+      if (inside) roof.mesh.material.opacity = 0.18;
+    }
+  }
+
   for (const mesh of playerMeshes.values()) {
     const dirVec = mesh.position.clone().sub(camera.position).normalize();
     ray.set(camera.position, dirVec);
     const hits = ray.intersectObjects(walls, false);
     hits.forEach((h) => {
-      if (h.distance < camera.position.distanceTo(mesh.position)) h.object.material.opacity = 0.2;
+      if (h.distance < camera.position.distanceTo(mesh.position)) h.object.material.opacity = 0.22;
     });
   }
 }
@@ -346,14 +414,16 @@ function connect() {
 
 function syncMeshes() {
   if (!state.server) return;
+
   for (const p of state.server.players) {
     if (!playerMeshes.has(p.id)) {
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.8), matPlayer.clone());
+      // Slightly oversized characters for readability against props/doors.
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.6, 1.0), matPlayer.clone());
       mesh.material.color = new THREE.Color(p.id === state.playerId ? '#ffe066' : '#ff9f66');
       scene.add(mesh);
       playerMeshes.set(p.id, mesh);
     }
-    playerMeshes.get(p.id).position.set(p.x, 0.6, p.y);
+    playerMeshes.get(p.id).position.set(p.x, 0.8, p.y);
   }
   for (const [id, mesh] of playerMeshes.entries()) {
     if (!state.server.players.some((p) => p.id === id)) {
@@ -364,11 +434,11 @@ function syncMeshes() {
 
   for (const g of state.server.ghosts) {
     if (!ghostMeshes.has(g.id)) {
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.8), matGhost);
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.6, 1.0), matGhost);
       scene.add(mesh);
       ghostMeshes.set(g.id, mesh);
     }
-    ghostMeshes.get(g.id).position.set(g.x, 0.6, g.y);
+    ghostMeshes.get(g.id).position.set(g.x, 0.8, g.y);
   }
   for (const [id, mesh] of ghostMeshes.entries()) {
     if (!state.server.ghosts.some((g) => g.id === id)) {
@@ -378,9 +448,8 @@ function syncMeshes() {
   }
 
   const roomShift = state.server.roomIndex * 4;
-  camera.position.set(10 + roomShift, 13, 10 + roomShift);
-  camera.lookAt(roomShift, 0, roomShift);
-  applyOcclusionFade();
+  updateCameraForRoom(roomShift, roomShift);
+  applyOcclusionDiscipline();
 }
 
 function renderHUD() {
@@ -453,14 +522,6 @@ window.addEventListener('keydown', async (e) => {
       state.ws.send(JSON.stringify({ type: 'pause', action: 'abandon-run' }));
     }
   }
-  if (key === 'z') {
-    currentZoom = (currentZoom + 1) % cameraZoomLevels.length;
-    camera.left = -cameraZoomLevels[currentZoom];
-    camera.right = cameraZoomLevels[currentZoom];
-    camera.top = cameraZoomLevels[currentZoom];
-    camera.bottom = -cameraZoomLevels[currentZoom];
-    camera.updateProjectionMatrix();
-  }
 });
 
 window.addEventListener('mousemove', (e) => {
@@ -514,4 +575,8 @@ function animate() {
 }
 animate();
 
-window.addEventListener('resize', () => renderer.setSize(window.innerWidth, window.innerHeight));
+window.addEventListener('resize', () => {
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+});

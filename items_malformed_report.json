@@ -1,0 +1,102 @@
+{
+  "total_rows": 150,
+  "grouped_by_column": {
+    "Bonus": [
+      {
+        "row_number": 16,
+        "name": "Adept Ring",
+        "value": "",
+        "error": "missing required numeric"
+      },
+      {
+        "row_number": 17,
+        "name": "Cleric's Ring",
+        "value": "",
+        "error": "missing required numeric"
+      },
+      {
+        "row_number": 28,
+        "name": "War Ring",
+        "value": "",
+        "error": "missing required numeric"
+      },
+      {
+        "row_number": 52,
+        "name": "Sleep Ring",
+        "value": "",
+        "error": "missing required numeric"
+      },
+      {
+        "row_number": 53,
+        "name": "Healing Ring",
+        "value": "",
+        "error": "missing required numeric"
+      },
+      {
+        "row_number": 54,
+        "name": "Unicorn Ring",
+        "value": "",
+        "error": "missing required numeric"
+      },
+      {
+        "row_number": 55,
+        "name": "Fairy Ring",
+        "value": "",
+        "error": "missing required numeric"
+      },
+      {
+        "row_number": 127,
+        "name": "Orb of Force",
+        "value": "",
+        "error": "missing required numeric"
+      },
+      {
+        "row_number": 128,
+        "name": "Douse Drop",
+        "value": "",
+        "error": "missing required numeric"
+      },
+      {
+        "row_number": 129,
+        "name": "Frost Jewel",
+        "value": "",
+        "error": "missing required numeric"
+      },
+      {
+        "row_number": 130,
+        "name": "Lifting Gem",
+        "value": "",
+        "error": "missing required numeric"
+      },
+      {
+        "row_number": 131,
+        "name": "Halt Gem",
+        "value": "",
+        "error": "missing required numeric"
+      },
+      {
+        "row_number": 132,
+        "name": "Cloak Ball",
+        "value": "",
+        "error": "missing required numeric"
+      },
+      {
+        "row_number": 133,
+        "name": "Carry Stone",
+        "value": "",
+        "error": "missing required numeric"
+      },
+      {
+        "row_number": 134,
+        "name": "Catch Beads",
+        "value": "",
+        "error": "missing required numeric"
+      }
+    ]
+  },
+  "schema_notes": [
+    "Sheet contains an extra empty column header \"\"; values preserved as-is."
+  ],
+  "malformed_row_count": 15,
+  "total_issues": 15
+}

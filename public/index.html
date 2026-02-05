@@ -21,7 +21,7 @@
       <h2>Loadout</h2>
       <select id="avatarSelect"></select>
       <select id="djinnSelect" multiple size="8"></select>
-      <div>Keybinds: WASD move, 1-8 verbs, Q djinn, E summon, F contribute, Esc pause</div>
+      <div>Keybinds: WASD move, 1-8 verbs, Q djinn, E summon, F contribute, Y confirm demo, Esc pause</div>
       <h2>Difficulty</h2>
       <select id="difficultySelect">
         <option>relaxed</option><option selected>standard</option><option>harsh</option>
@@ -47,6 +47,7 @@
         <button data-pause="restart-room">Restart Room</button>
         <button data-pause="abandon-run">Abandon Run</button>
       </div>
+      <div id="confirmOverlay" class="confirm-overlay hidden"></div>
     </div>
   </div>
   <canvas id="game"></canvas>

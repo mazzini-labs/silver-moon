@@ -15,7 +15,8 @@ const state = {
   server: null,
   paused: false,
   verbIndex: 0,
-  replayLog: []
+  replayLog: [],
+  uiLog: []
 };
 
 const verbs = ['push_pull', 'lift_throw', 'pound', 'freeze', 'growth', 'tether', 'reveal', 'swap'];
@@ -33,24 +34,219 @@ const bossEl = document.getElementById('bossWidget');
 const minimapEl = document.getElementById('minimap');
 const debugEl = document.getElementById('debug');
 const pauseMenu = document.getElementById('pauseMenu');
+const confirmOverlayEl = document.getElementById('confirmOverlay');
 
-function show(name) { Object.values(screens).forEach((s) => s.classList.remove('active')); screens[name].classList.add('active'); }
+function logUI(message) {
+  state.uiLog.push(message);
+  if (state.uiLog.length > 12) state.uiLog.shift();
+}
 
-const [content, dungeons] = await Promise.all([fetch('/api/content').then((r) => r.json()), fetch('/api/dungeons').then((r) => r.json())]);
+class ConfirmChoiceOverlay {
+  constructor(rootEl, getPortrait) {
+    this.root = rootEl;
+    this.getPortrait = getPortrait;
+    this.resolve = null;
+    this.selection = 0;
+    this.opened = false;
+    this.portraits = [];
+    this.audioCtx = null;
+
+    this.root.innerHTML = `
+      <div class="confirm-dialog">
+        <div class="confirm-message" id="confirmMessage"></div>
+        <div class="confirm-portraits" id="confirmPortraits"></div>
+        <div class="confirm-buttons">
+          <button class="confirm-choice-btn" data-choice="0">YES</button>
+          <button class="confirm-choice-btn" data-choice="1">NO</button>
+        </div>
+      </div>
+    `;
+
+    this.messageEl = this.root.querySelector('#confirmMessage');
+    this.portraitWrap = this.root.querySelector('#confirmPortraits');
+    this.buttons = [...this.root.querySelectorAll('.confirm-choice-btn')];
+
+    this.buttons.forEach((button) => {
+      button.onclick = () => this.confirm(Number(button.dataset.choice));
+      button.onmouseenter = () => this.setSelection(Number(button.dataset.choice));
+    });
+  }
+
+  isOpen() {
+    return this.opened;
+  }
+
+  tone(freq, durationMs) {
+    if (!this.audioCtx) this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = this.audioCtx;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.08, now + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + durationMs / 1000);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + durationMs / 1000 + 0.01);
+  }
+
+  playMove() { this.tone(540, 50); }
+  playConfirm() { this.tone(860, 90); }
+
+  setSelection(index) {
+    const next = index === 0 ? 0 : 1;
+    if (next === this.selection) return;
+    this.selection = next;
+    this.playMove();
+    this.renderSelection();
+  }
+
+  renderSelection() {
+    this.portraits.forEach((el, i) => {
+      const selected = i === this.selection;
+      el.classList.toggle('selected', selected);
+      el.classList.toggle('breathe', selected);
+    });
+  }
+
+  open(message, characterId) {
+    if (this.opened) return Promise.resolve(null);
+    this.opened = true;
+    this.selection = 0;
+    this.messageEl.textContent = message;
+
+    const portraits = [this.getPortrait(characterId, 'yes'), this.getPortrait(characterId, 'no')];
+    this.portraitWrap.innerHTML = '';
+    this.portraits = portraits.map((src, i) => {
+      const img = document.createElement('img');
+      img.className = 'confirm-portrait';
+      img.src = src;
+      img.draggable = false;
+      img.style.width = '24px';
+      img.style.height = '24px';
+      img.style.imageRendering = 'pixelated';
+      img.onmouseenter = () => this.setSelection(i);
+      img.onclick = () => this.confirm(i);
+      this.portraitWrap.append(img);
+      return img;
+    });
+    this.renderSelection();
+
+    this.root.classList.remove('hidden');
+    return new Promise((resolve) => { this.resolve = resolve; });
+  }
+
+  confirm(index) {
+    if (!this.opened) return;
+    this.playConfirm();
+    const decision = index === 0;
+    this.close(decision);
+  }
+
+  cancel() {
+    if (!this.opened) return;
+    this.close(null);
+  }
+
+  close(result) {
+    this.opened = false;
+    this.root.classList.add('hidden');
+    if (this.resolve) this.resolve(result);
+    this.resolve = null;
+  }
+}
+
+function show(name) {
+  Object.values(screens).forEach((s) => s.classList.remove('active'));
+  screens[name].classList.add('active');
+}
+
+function buildPortraitFactory(characters) {
+  // Placeholder 24x24 portraits generated in code.
+  // Replace this with authored sprite assets later (e.g. /public/sprites/portraits.png + UV map).
+  const byId = new Map();
+  const palette = ['#cc6655', '#f0b84a', '#66b3d9', '#82d17a', '#8a78d8', '#d96fb8', '#73d9c1', '#d9d56f'];
+
+  for (let i = 0; i < characters.length; i += 1) {
+    const c = document.createElement('canvas');
+    c.width = 24;
+    c.height = 24;
+    const ctx = c.getContext('2d', { alpha: true });
+    ctx.imageSmoothingEnabled = false;
+    const color = palette[i % palette.length];
+
+    ctx.fillStyle = '#111';
+    ctx.fillRect(0, 0, 24, 24);
+    ctx.fillStyle = '#222';
+    ctx.fillRect(1, 1, 22, 22);
+    ctx.fillStyle = '#f2d7b0';
+    ctx.fillRect(6, 5, 12, 10);
+    ctx.fillStyle = color;
+    ctx.fillRect(4, 3, 16, 5);
+    ctx.fillRect(6, 15, 12, 6);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(9, 9, 2, 2);
+    ctx.fillRect(13, 9, 2, 2);
+
+    byId.set(characters[i].id, c.toDataURL());
+  }
+
+  const yesNoTint = (base, mode) => {
+    const c = document.createElement('canvas');
+    c.width = 24;
+    c.height = 24;
+    const ctx = c.getContext('2d', { alpha: true });
+    ctx.imageSmoothingEnabled = false;
+    const img = new Image();
+    img.src = base;
+    ctx.drawImage(img, 0, 0);
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.fillStyle = mode === 'yes' ? 'rgba(50,230,120,0.25)' : 'rgba(240,100,100,0.25)';
+    ctx.fillRect(0, 0, 24, 24);
+    ctx.globalCompositeOperation = 'source-over';
+    return c.toDataURL();
+  };
+
+  return (characterId, mode) => {
+    const base = byId.get(characterId) || [...byId.values()][0];
+    return yesNoTint(base, mode);
+  };
+}
+
+const [content, dungeons] = await Promise.all([
+  fetch('/api/content').then((r) => r.json()),
+  fetch('/api/dungeons').then((r) => r.json())
+]);
 state.content = content;
 state.dungeons = dungeons;
 
+const getPortrait = buildPortraitFactory(content.characters);
+const confirmOverlay = new ConfirmChoiceOverlay(confirmOverlayEl, getPortrait);
+
 const dungeonSelect = document.getElementById('dungeonSelect');
 content.dungeons.forEach((d) => {
-  const op = document.createElement('option'); op.value = d.id; op.textContent = `${d.name} (${d.id})`; dungeonSelect.append(op);
+  const op = document.createElement('option');
+  op.value = d.id;
+  op.textContent = `${d.name} (${d.id})`;
+  dungeonSelect.append(op);
 });
+
 const avatarSelect = document.getElementById('avatarSelect');
 content.characters.forEach((c) => {
-  const op = document.createElement('option'); op.value = c.id; op.textContent = `${c.element}/${c.weapon} - ${c.name}`; avatarSelect.append(op);
+  const op = document.createElement('option');
+  op.value = c.id;
+  op.textContent = `${c.element}/${c.weapon} - ${c.name}`;
+  avatarSelect.append(op);
 });
+
 const djinnSelect = document.getElementById('djinnSelect');
 Object.values(content.djinn).flat().forEach((d) => {
-  const op = document.createElement('option'); op.value = d.id; op.textContent = `${d.name}: ${d.active}`; djinnSelect.append(op);
+  const op = document.createElement('option');
+  op.value = d.id;
+  op.textContent = `${d.name}: ${d.active}`;
+  djinnSelect.append(op);
 });
 
 for (const btn of document.querySelectorAll('[data-mode]')) {
@@ -90,8 +286,8 @@ const matPreview = new THREE.MeshBasicMaterial({ color: '#00ffcc', wireframe: tr
 const grid = new THREE.Group();
 scene.add(grid);
 const walls = [];
-for (let x = -6; x <= 6; x++) {
-  for (let y = -6; y <= 6; y++) {
+for (let x = -6; x <= 6; x += 1) {
+  for (let y = -6; y <= 6; y += 1) {
     const tile = new THREE.Mesh(new THREE.BoxGeometry(1, 0.1, 1), matGround);
     tile.position.set(x, -0.05, y);
     grid.add(tile);
@@ -117,7 +313,9 @@ function applyOcclusionFade() {
     const dirVec = mesh.position.clone().sub(camera.position).normalize();
     ray.set(camera.position, dirVec);
     const hits = ray.intersectObjects(walls, false);
-    hits.forEach((h) => { if (h.distance < camera.position.distanceTo(mesh.position)) h.object.material.opacity = 0.2; });
+    hits.forEach((h) => {
+      if (h.distance < camera.position.distanceTo(mesh.position)) h.object.material.opacity = 0.2;
+    });
   }
 }
 
@@ -152,20 +350,32 @@ function syncMeshes() {
     if (!playerMeshes.has(p.id)) {
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.8), matPlayer.clone());
       mesh.material.color = new THREE.Color(p.id === state.playerId ? '#ffe066' : '#ff9f66');
-      scene.add(mesh); playerMeshes.set(p.id, mesh);
+      scene.add(mesh);
+      playerMeshes.set(p.id, mesh);
     }
     playerMeshes.get(p.id).position.set(p.x, 0.6, p.y);
   }
-  for (const [id, mesh] of playerMeshes.entries()) if (!state.server.players.some((p) => p.id === id)) { scene.remove(mesh); playerMeshes.delete(id); }
+  for (const [id, mesh] of playerMeshes.entries()) {
+    if (!state.server.players.some((p) => p.id === id)) {
+      scene.remove(mesh);
+      playerMeshes.delete(id);
+    }
+  }
 
   for (const g of state.server.ghosts) {
     if (!ghostMeshes.has(g.id)) {
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.8), matGhost);
-      scene.add(mesh); ghostMeshes.set(g.id, mesh);
+      scene.add(mesh);
+      ghostMeshes.set(g.id, mesh);
     }
     ghostMeshes.get(g.id).position.set(g.x, 0.6, g.y);
   }
-  for (const [id, mesh] of ghostMeshes.entries()) if (!state.server.ghosts.some((g) => g.id === id)) { scene.remove(mesh); ghostMeshes.delete(id); }
+  for (const [id, mesh] of ghostMeshes.entries()) {
+    if (!state.server.ghosts.some((g) => g.id === id)) {
+      scene.remove(mesh);
+      ghostMeshes.delete(id);
+    }
+  }
 
   const roomShift = state.server.roomIndex * 4;
   camera.position.set(10 + roomShift, 13, 10 + roomShift);
@@ -175,8 +385,8 @@ function syncMeshes() {
 
 function renderHUD() {
   if (!state.server) return;
-  partyEl.innerHTML = `<b>Party (${state.server.players.length}/8)</b><br>` + state.server.players.map((p) => `${p.name} HP:${Math.round(p.hp)} Djinn:${p.djinn.filter((d)=>d.state==='set').length}/${p.djinn.length}`).join('<br>');
-  hotbarEl.innerHTML = verbs.map((v, i) => `<span ${i===state.verbIndex?'style="color:#00ffcc"':''}>[${i+1}] ${v}</span>`).join(' | ');
+  partyEl.innerHTML = `<b>Party (${state.server.players.length}/8)</b><br>${state.server.players.map((p) => `${p.name} HP:${Math.round(p.hp)} Djinn:${p.djinn.filter((d) => d.state === 'set').length}/${p.djinn.length}`).join('<br>')}`;
+  hotbarEl.innerHTML = verbs.map((v, i) => `<span ${i === state.verbIndex ? 'style="color:#00ffcc"' : ''}>[${i + 1}] ${v}</span>`).join(' | ');
 
   const objectiveLine = state.server.roomIndex < 2
     ? `Contribute to room seals (${state.server.objectiveProgress}/${state.server.objectiveRequired}).`
@@ -185,7 +395,7 @@ function renderHUD() {
   hintEl.innerHTML = `<b>Objective hints</b><br>${objectiveLine}<br>Ping: middle-click mark target/danger/go here.`;
   bossEl.innerHTML = `<b>Boss phase</b><br>Phase ${state.server.bossPhase + 1} HP ${state.server.bossHP}<br>Spotlight: ${(state.server.bossSpotlightVerbs || []).join(', ')}`;
   minimapEl.innerHTML = `Dungeon ${state.server.dungeonId}<br>Room ${state.server.roomIndex + 1}/3`;
-  debugEl.innerHTML = `<b>Debug overlay</b><br>Tick:${state.server.tick}<br>Traces:${state.server.traces.map((t)=>t.verb||t.summon||'boss-charge').join(', ')}<br>Replay log:${state.replayLog.slice(-5).join(' | ')}`;
+  debugEl.innerHTML = `<b>Debug overlay</b><br>Tick:${state.server.tick}<br>Traces:${state.server.traces.map((t) => t.verb || t.summon || 'boss-charge').join(', ')}<br>UI:${state.uiLog.slice(-4).join(' | ')}<br>Replay:${state.replayLog.slice(-3).join(' | ')}`;
 }
 
 function sendInput(payload) {
@@ -194,24 +404,56 @@ function sendInput(payload) {
   state.ws.send(JSON.stringify({ type: 'input', payload }));
 }
 
-window.addEventListener('keydown', (e) => {
+async function askYesNo(message) {
+  const result = await confirmOverlay.open(message, state.characterId);
+  logUI(`confirm ${message} => ${result === null ? 'cancel' : result ? 'yes' : 'no'}`);
+  return result;
+}
+
+window.addEventListener('keydown', async (e) => {
+  if (confirmOverlay.isOpen()) {
+    const key = e.key.toLowerCase();
+    if (key === 'arrowleft' || key === 'arrowup') {
+      e.preventDefault();
+      confirmOverlay.setSelection(0);
+    } else if (key === 'arrowright' || key === 'arrowdown') {
+      e.preventDefault();
+      confirmOverlay.setSelection(1);
+    } else if (key === 'enter' || key === ' ') {
+      e.preventDefault();
+      confirmOverlay.confirm(confirmOverlay.selection);
+    } else if (key === 'escape') {
+      e.preventDefault();
+      confirmOverlay.cancel();
+    }
+    return;
+  }
+
   if (e.key === 'Escape') {
     state.paused = !state.paused;
     pauseMenu.classList.toggle('hidden', !state.paused);
     return;
   }
   if (state.paused) return;
+
+  const key = e.key.toLowerCase();
   const dirs = { w: 'up', a: 'left', s: 'down', d: 'right' };
-  if (dirs[e.key]) sendInput({ type: 'move', dir: dirs[e.key], buffer: [dirs[e.key]] });
+  if (dirs[key]) sendInput({ type: 'move', dir: dirs[key], buffer: [dirs[key]] });
   const idx = Number(e.key) - 1;
   if (idx >= 0 && idx < 8) {
     state.verbIndex = idx;
     sendInput({ type: 'verb', verb: verbs[idx], cell: [Math.round(preview.position.x), Math.round(preview.position.z)] });
   }
-  if (e.key.toLowerCase() === 'q') sendInput({ type: 'djinn', id: state.selectedDjinn[0] });
-  if (e.key.toLowerCase() === 'e') sendInput({ type: 'summon', id: state.content.summons[0].id });
-  if (e.key.toLowerCase() === 'f') sendInput({ type: 'contribute' });
-  if (e.key.toLowerCase() === 'z') {
+  if (key === 'q') sendInput({ type: 'djinn', id: state.selectedDjinn[0] });
+  if (key === 'e') sendInput({ type: 'summon', id: state.content.summons[0].id });
+  if (key === 'f') sendInput({ type: 'contribute' });
+  if (key === 'y') {
+    const result = await askYesNo('abandon run?');
+    if (result === true && state.ws?.readyState === 1) {
+      state.ws.send(JSON.stringify({ type: 'pause', action: 'abandon-run' }));
+    }
+  }
+  if (key === 'z') {
     currentZoom = (currentZoom + 1) % cameraZoomLevels.length;
     camera.left = -cameraZoomLevels[currentZoom];
     camera.right = cameraZoomLevels[currentZoom];
@@ -233,13 +475,22 @@ window.addEventListener('mousemove', (e) => {
 });
 
 for (const btn of document.querySelectorAll('[data-pause]')) {
-  btn.onclick = () => {
+  btn.onclick = async () => {
     const action = btn.dataset.pause;
     if (action === 'resume') {
       state.paused = false;
       pauseMenu.classList.add('hidden');
-    } else {
+      return;
+    }
+
+    const prompt = action === 'restart-room' ? 'restart room?' : 'abandon run?';
+    const result = await askYesNo(prompt);
+    if (result === true && state.ws?.readyState === 1) {
       state.ws.send(JSON.stringify({ type: 'pause', action }));
+      if (action === 'abandon-run') {
+        state.paused = false;
+        pauseMenu.classList.add('hidden');
+      }
     }
   };
 }
@@ -254,6 +505,7 @@ document.getElementById('startBtn').onclick = () => {
   hud.classList.remove('hidden');
   show('play');
   screens.play.classList.remove('active');
+  logUI('run started');
 };
 
 function animate() {

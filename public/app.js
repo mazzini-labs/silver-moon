@@ -63,7 +63,6 @@ for (const btn of document.querySelectorAll('[data-mode]')) {
 document.getElementById('optionsBtn').onclick = () => show('options');
 document.getElementById('closeOptions').onclick = () => show('setup');
 
-// Three.js fixed-isometric rendering
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));

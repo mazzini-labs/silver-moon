@@ -1,0 +1,20 @@
+:root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; }
+body { margin: 0; overflow: hidden; background: #0f1220; }
+#game { width: 100vw; height: 100vh; display: block; }
+#ui { position: fixed; inset: 0; pointer-events: none; }
+.screen { position: absolute; inset: 10% 20%; background: #1f2536ee; padding: 16px; border: 2px solid #7f8fb3; display: none; pointer-events: all; }
+.screen.active { display: block; }
+button, select, input { margin: 4px; background: #2e364f; color: white; border: 1px solid #7f8fb3; padding: 6px; }
+#hud { position: absolute; inset: 0; pointer-events: none; }
+#hud.hidden { display: none; }
+#party, #hotbar, #hintLog, #bossWidget, #minimap, #debug {
+  position: absolute; background: #111827cc; border: 1px solid #6b7280; padding: 6px; font-size: 12px; pointer-events: none;
+}
+#party { top: 8px; left: 8px; width: 260px; }
+#hotbar { bottom: 8px; left: 50%; transform: translateX(-50%); }
+#hintLog { top: 8px; right: 8px; width: 280px; }
+#bossWidget { top: 110px; right: 8px; width: 280px; }
+#minimap { bottom: 8px; right: 8px; width: 150px; height: 150px; }
+#debug { bottom: 8px; left: 8px; width: 300px; }
+#pauseMenu { position: absolute; inset: 35% 40%; background: #000c; border: 2px solid #aaa; padding: 10px; pointer-events: all; }
+#pauseMenu.hidden { display: none; }

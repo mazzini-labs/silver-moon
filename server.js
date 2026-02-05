@@ -109,27 +109,6 @@ function applyInput(room, player, input) {
     }
   }
 
-  if (input.type === 'move') {
-    const dir = input.dir;
-    const map = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
-    const [dx, dy] = map[dir] || [0, 0];
-    player.targetX = player.x + dx * TILE_SIZE;
-    player.targetY = player.y + dy * TILE_SIZE;
-    player.buffer = input.buffer || [];
-  }
-  if (input.type === 'verb') {
-    room.traces.push({ t: room.tick, by: player.id, verb: input.verb, cell: input.cell });
-    if (input.verb === 'reveal' || input.verb === 'pound' || input.verb === 'growth') {
-      room.objectiveProgress = Math.min(room.objectiveRequired, room.objectiveProgress + 1);
-    }
-    if (room.roomIndex === 2) {
-      room.bossHP = Math.max(0, room.bossHP - 8);
-      if (room.bossHP === 0 && room.bossPhase < 1) {
-        room.bossPhase += 1;
-        room.bossHP = 100;
-      }
-    }
-  }
   if (input.type === 'djinn') {
     const d = player.djinn.find((x) => x.id === input.id);
     if (d && d.state === 'set') d.state = 'standby';
@@ -156,12 +135,6 @@ function applyInput(room, player, input) {
     } else {
       room.bossCharge = Math.min(room.bossChargeRequired, room.bossCharge + 1);
       room.traces.push({ t: room.tick, by: player.id, bossCharge: room.bossCharge });
-  if (input.type === 'contribute') {
-    room.objectiveProgress = Math.min(room.objectiveRequired, room.objectiveProgress + 1);
-    if (room.objectiveProgress >= room.objectiveRequired) {
-      room.roomIndex = Math.min(2, room.roomIndex + 1);
-      room.objectiveProgress = 0;
-      room.objectiveRequired = room.roomIndex === 1 ? 3 : 4;
     }
   }
 }
@@ -184,12 +157,6 @@ function tickRoom(room) {
     if (player.statPenaltyTicks > 0) player.statPenaltyTicks -= 1;
   }
 
-  for (const player of room.players.values()) {
-    const speed = 0.25;
-    player.x += Math.sign(player.targetX - player.x) * Math.min(Math.abs(player.targetX - player.x), speed);
-    player.y += Math.sign(player.targetY - player.y) * Math.min(Math.abs(player.targetY - player.y), speed);
-    if (player.statPenaltyTicks > 0) player.statPenaltyTicks -= 1;
-  }
   for (const ghost of room.ghosts.values()) {
     const nearest = [...room.players.values()][0];
     if (nearest) {
@@ -214,8 +181,6 @@ wss.on('connection', (ws) => {
   ws.on('message', (raw) => {
     const msg = JSON.parse(raw.toString());
 
-  ws.on('message', (raw) => {
-    const msg = JSON.parse(raw.toString());
     if (msg.type === 'host' || msg.type === 'join' || msg.type === 'solo') {
       const code = msg.type === 'solo' ? `SOLO-${Math.floor(Math.random() * 1000)}` : (msg.code || `ROOM-${Math.floor(Math.random() * 1000)}`);
       if (!rooms.has(code)) rooms.set(code, mkRoom(code));
@@ -229,8 +194,6 @@ wss.on('connection', (ws) => {
       const spawnCellX = Math.floor(Math.random() * 4) - 2;
       const spawnCellY = Math.floor(Math.random() * 4) - 2;
 
-      const ghostTakeover = currentRoom.ghosts.get(playerId);
-      if (ghostTakeover) currentRoom.ghosts.delete(playerId);
       currentRoom.players.set(playerId, {
         id: playerId,
         ws,
@@ -241,10 +204,6 @@ wss.on('connection', (ws) => {
         y: spawnCellY * TILE_SIZE,
         targetX: spawnCellX * TILE_SIZE,
         targetY: spawnCellY * TILE_SIZE,
-        x: Math.random() * 4,
-        y: Math.random() * 4,
-        targetX: 0,
-        targetY: 0,
         hp: 100,
         characterId: msg.characterId,
         djinn: msg.djinn,
@@ -255,8 +214,6 @@ wss.on('connection', (ws) => {
       ws.send(JSON.stringify({ type: 'joined', code }));
     }
 
-      ws.send(JSON.stringify({ type: 'joined', code }));
-    }
     if (msg.type === 'input' && currentRoom) {
       const p = currentRoom.players.get(playerId);
       if (p) applyInput(currentRoom, p, msg.payload);
@@ -266,9 +223,6 @@ wss.on('connection', (ws) => {
       if (msg.action === 'restart-room') {
         currentRoom.objectiveProgress = 0;
         if (currentRoom.roomIndex === 2) currentRoom.bossCharge = 0;
-    if (msg.type === 'pause' && currentRoom) {
-      if (msg.action === 'restart-room') {
-        currentRoom.objectiveProgress = 0;
       }
       if (msg.action === 'abandon-run') {
         currentRoom.roomIndex = 0;

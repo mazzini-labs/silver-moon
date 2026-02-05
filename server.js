@@ -13,33 +13,49 @@ const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || '';
 
 const TICK_RATE = 20;
 const TILE_SIZE = content.tileSize;
+
 const app = express();
 app.use(express.static('public'));
 app.get('/api/content', (_req, res) => res.json(content));
 app.get('/api/dungeons', (_req, res) => res.json(dungeonDefs));
-app.get('/api/runtime', (_req, res) => {
-  res.json({ port: PORT, host: HOST, wsPath: WS_PATH, publicBaseUrl: PUBLIC_BASE_URL });
+app.get('/api/runtime', (_req, res) => res.json({ port: PORT, host: HOST, wsPath: WS_PATH, publicBaseUrl: PUBLIC_BASE_URL }));
+app.get('/api/lobbies', (_req, res) => {
+  const lobbies = [...lobbyMap.values()].map((l) => ({
+    code: l.code,
+    inRun: l.inRun,
+    hostId: l.hostId,
+    players: [...l.clients.values()].map((c) => ({ id: c.id, name: c.name, ready: c.ready, spectator: c.spectator }))
+  }));
+  res.json({ count: lobbies.length, lobbies });
 });
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: WS_PATH });
 
-const rooms = new Map();
+const lobbyMap = new Map();
 
-function clamp(v, min, max) {
-  return Math.max(min, Math.min(max, v));
+function randCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let out = '';
+  for (let i = 0; i < 5; i += 1) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
 }
-
+function createLobbyCode() {
+  let code = randCode();
+  while (lobbyMap.has(code)) code = randCode();
+  return code;
+}
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 function spotlightVerbsForDungeon(dungeonId) {
   return content.dungeons.find((d) => d.id === dungeonId)?.verbs ?? ['push_pull', 'pound', 'reveal'];
 }
 
-function mkRoom(code) {
+function makeLobby(code, hostId) {
   return {
     code,
+    hostId,
+    inRun: false,
     mode: 'dungeon-run',
-    players: new Map(),
-    ghosts: new Map(),
     dungeonId: 'd1',
     difficulty: 'standard',
     roomIndex: 0,
@@ -51,40 +67,112 @@ function mkRoom(code) {
     bossChargeRequired: 2,
     tick: 0,
     traces: [],
-    inputLog: []
+    inputLog: [],
+    clients: new Map(),
+    players: new Map(),
+    ghosts: new Map()
   };
 }
 
-function recalcBossChargeRequired(room) {
-  const activeParticipants = room.players.size + room.ghosts.size;
-  room.bossChargeRequired = clamp(Math.ceil(activeParticipants / 2), 1, 4);
-}
-
-function roomSnapshot(room) {
+function lobbyView(lobby) {
   return {
-    code: room.code,
-    mode: room.mode,
-    dungeonId: room.dungeonId,
-    difficulty: room.difficulty,
-    roomIndex: room.roomIndex,
-    objectiveProgress: room.objectiveProgress,
-    objectiveRequired: room.objectiveRequired,
-    bossPhase: room.bossPhase,
-    bossHP: room.bossHP,
-    bossCharge: room.bossCharge,
-    bossChargeRequired: room.bossChargeRequired,
-    bossSpotlightVerbs: spotlightVerbsForDungeon(room.dungeonId),
-    players: [...room.players.values()].map((p) => ({ ...p, ws: undefined })),
-    ghosts: [...room.ghosts.values()],
-    tick: room.tick,
-    traces: room.traces.slice(-20),
-    inputLog: room.inputLog.slice(-50)
+    code: lobby.code,
+    hostId: lobby.hostId,
+    inRun: lobby.inRun,
+    dungeonId: lobby.dungeonId,
+    difficulty: lobby.difficulty,
+    players: [...lobby.clients.values()].map((c) => ({
+      id: c.id,
+      name: c.name,
+      ready: c.ready,
+      spectator: c.spectator,
+      characterId: c.characterId
+    }))
   };
 }
 
-function applyInput(room, player, input) {
-  room.inputLog.push({ tick: room.tick, playerId: player.id, input });
+function roomSnapshot(lobby) {
+  return {
+    code: lobby.code,
+    mode: lobby.mode,
+    dungeonId: lobby.dungeonId,
+    difficulty: lobby.difficulty,
+    roomIndex: lobby.roomIndex,
+    objectiveProgress: lobby.objectiveProgress,
+    objectiveRequired: lobby.objectiveRequired,
+    bossPhase: lobby.bossPhase,
+    bossHP: lobby.bossHP,
+    bossCharge: lobby.bossCharge,
+    bossChargeRequired: lobby.bossChargeRequired,
+    bossSpotlightVerbs: spotlightVerbsForDungeon(lobby.dungeonId),
+    players: [...lobby.players.values()].map((p) => ({ ...p, ws: undefined })),
+    ghosts: [...lobby.ghosts.values()],
+    tick: lobby.tick,
+    traces: lobby.traces.slice(-20),
+    inputLog: lobby.inputLog.slice(-50)
+  };
+}
 
+function recalcBossChargeRequired(lobby) {
+  const activeParticipants = lobby.players.size + lobby.ghosts.size;
+  lobby.bossChargeRequired = clamp(Math.ceil(activeParticipants / 2), 1, 4);
+}
+
+function broadcastLobby(lobby) {
+  const msg = JSON.stringify({ type: 'lobby_update', lobby: lobbyView(lobby) });
+  for (const c of lobby.clients.values()) {
+    if (c.ws.readyState === 1) c.ws.send(msg);
+  }
+}
+
+function ensureHostOnDisconnect(lobby) {
+  if (lobby.clients.has(lobby.hostId)) return;
+  const first = [...lobby.clients.values()][0];
+  if (first) lobby.hostId = first.id;
+}
+
+function startRun(lobby) {
+  if (lobby.inRun) return;
+  lobby.inRun = true;
+  lobby.roomIndex = 0;
+  lobby.objectiveProgress = 0;
+  lobby.objectiveRequired = 2;
+  lobby.bossPhase = 0;
+  lobby.bossHP = 100;
+  lobby.bossCharge = 0;
+  lobby.ghosts.clear();
+  lobby.players.clear();
+
+  for (const c of lobby.clients.values()) {
+    if (c.spectator) continue;
+    const spawnCellX = Math.floor(Math.random() * 4) - 2;
+    const spawnCellY = Math.floor(Math.random() * 4) - 2;
+    lobby.players.set(c.id, {
+      id: c.id,
+      ws: c.ws,
+      name: c.name,
+      cellX: spawnCellX,
+      cellY: spawnCellY,
+      x: spawnCellX * TILE_SIZE,
+      y: spawnCellY * TILE_SIZE,
+      targetX: spawnCellX * TILE_SIZE,
+      targetY: spawnCellY * TILE_SIZE,
+      hp: 100,
+      characterId: c.characterId,
+      djinn: c.djinn,
+      statPenaltyTicks: 0
+    });
+  }
+  recalcBossChargeRequired(lobby);
+
+  const snap = JSON.stringify({ type: 'run_started', state: roomSnapshot(lobby), lobby: lobbyView(lobby) });
+  for (const c of lobby.clients.values()) {
+    if (c.ws.readyState === 1) c.ws.send(snap);
+  }
+}
+
+function applyInput(lobby, player, input) {
+  lobby.inputLog.push({ tick: lobby.tick, playerId: player.id, input });
   if (input.type === 'move') {
     const map = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
     const [dx, dy] = map[input.dir] || [0, 0];
@@ -94,65 +182,57 @@ function applyInput(room, player, input) {
     player.targetY = player.cellY * TILE_SIZE;
     player.buffer = input.buffer || [];
   }
-
   if (input.type === 'verb') {
-    room.traces.push({ t: room.tick, by: player.id, verb: input.verb, cell: input.cell });
-
-    if (room.roomIndex < 2 && (input.verb === 'reveal' || input.verb === 'pound' || input.verb === 'growth')) {
-      room.objectiveProgress = Math.min(room.objectiveRequired, room.objectiveProgress + 1);
+    lobby.traces.push({ t: lobby.tick, by: player.id, verb: input.verb, cell: input.cell });
+    if (lobby.roomIndex < 2 && (input.verb === 'reveal' || input.verb === 'pound' || input.verb === 'growth')) {
+      lobby.objectiveProgress = Math.min(lobby.objectiveRequired, lobby.objectiveProgress + 1);
     }
-
-    if (room.roomIndex === 2) {
-      const spotlight = spotlightVerbsForDungeon(room.dungeonId);
-      if (spotlight.includes(input.verb) && room.bossCharge >= room.bossChargeRequired) {
-        room.bossHP = Math.max(0, room.bossHP - 12);
-        room.bossCharge = 0;
-        room.traces.push({ t: room.tick, by: player.id, bossHit: true, verb: input.verb });
+    if (lobby.roomIndex === 2) {
+      const spotlight = spotlightVerbsForDungeon(lobby.dungeonId);
+      if (spotlight.includes(input.verb) && lobby.bossCharge >= lobby.bossChargeRequired) {
+        lobby.bossHP = Math.max(0, lobby.bossHP - 12);
+        lobby.bossCharge = 0;
+        lobby.traces.push({ t: lobby.tick, by: player.id, bossHit: true, verb: input.verb });
       }
-      if (room.bossHP === 0 && room.bossPhase < 1) {
-        room.bossPhase += 1;
-        room.bossHP = 100;
-        room.bossCharge = 0;
+      if (lobby.bossHP === 0 && lobby.bossPhase < 1) {
+        lobby.bossPhase += 1;
+        lobby.bossHP = 100;
+        lobby.bossCharge = 0;
       }
     }
   }
-
   if (input.type === 'djinn') {
     const d = player.djinn.find((x) => x.id === input.id);
     if (d && d.state === 'set') d.state = 'standby';
   }
-
   if (input.type === 'summon') {
     const standby = player.djinn.filter((d) => d.state === 'standby');
     const summon = content.summons.find((s) => s.id === input.id);
     if (summon && standby.length >= summon.costStandby) {
       standby.slice(0, summon.costStandby).forEach((d) => (d.state = 'set'));
       player.statPenaltyTicks = TICK_RATE * 20;
-      room.traces.push({ t: room.tick, by: player.id, summon: summon.name });
+      lobby.traces.push({ t: lobby.tick, by: player.id, summon: summon.name });
     }
   }
-
   if (input.type === 'contribute') {
-    if (room.roomIndex < 2) {
-      room.objectiveProgress = Math.min(room.objectiveRequired, room.objectiveProgress + 1);
-      if (room.objectiveProgress >= room.objectiveRequired) {
-        room.roomIndex = Math.min(2, room.roomIndex + 1);
-        room.objectiveProgress = 0;
-        room.objectiveRequired = room.roomIndex === 1 ? 3 : 4;
+    if (lobby.roomIndex < 2) {
+      lobby.objectiveProgress = Math.min(lobby.objectiveRequired, lobby.objectiveProgress + 1);
+      if (lobby.objectiveProgress >= lobby.objectiveRequired) {
+        lobby.roomIndex = Math.min(2, lobby.roomIndex + 1);
+        lobby.objectiveProgress = 0;
+        lobby.objectiveRequired = lobby.roomIndex === 1 ? 3 : 4;
       }
     } else {
-      room.bossCharge = Math.min(room.bossChargeRequired, room.bossCharge + 1);
-      room.traces.push({ t: room.tick, by: player.id, bossCharge: room.bossCharge });
+      lobby.bossCharge = Math.min(lobby.bossChargeRequired, lobby.bossCharge + 1);
+      lobby.traces.push({ t: lobby.tick, by: player.id, bossCharge: lobby.bossCharge });
     }
   }
 }
 
-function tickRoom(room) {
-  room.tick += 1;
-
-  recalcBossChargeRequired(room);
-
-  for (const player of room.players.values()) {
+function tickLobby(lobby) {
+  lobby.tick += 1;
+  recalcBossChargeRequired(lobby);
+  for (const player of lobby.players.values()) {
     const speed = 0.25;
     const snapX = player.cellX * TILE_SIZE;
     const snapY = player.cellY * TILE_SIZE;
@@ -164,9 +244,8 @@ function tickRoom(room) {
     if (Math.abs(player.targetY - player.y) < 0.001) player.y = player.targetY;
     if (player.statPenaltyTicks > 0) player.statPenaltyTicks -= 1;
   }
-
-  for (const ghost of room.ghosts.values()) {
-    const nearest = [...room.players.values()][0];
+  for (const ghost of lobby.ghosts.values()) {
+    const nearest = [...lobby.players.values()][0];
     if (nearest) {
       ghost.x += Math.sign(nearest.x - ghost.x) * 0.1;
       ghost.y += Math.sign(nearest.y - ghost.y) * 0.1;
@@ -175,89 +254,144 @@ function tickRoom(room) {
 }
 
 setInterval(() => {
-  for (const room of rooms.values()) {
-    tickRoom(room);
-    const snap = JSON.stringify({ type: 'snapshot', state: roomSnapshot(room) });
-    for (const p of room.players.values()) p.ws.send(snap);
+  for (const lobby of lobbyMap.values()) {
+    if (!lobby.inRun) continue;
+    tickLobby(lobby);
+    const snap = JSON.stringify({ type: 'snapshot', state: roomSnapshot(lobby), lobby: lobbyView(lobby) });
+    for (const c of lobby.clients.values()) {
+      if (c.ws.readyState === 1) c.ws.send(snap);
+    }
   }
 }, 1000 / TICK_RATE);
 
 wss.on('connection', (ws) => {
-  let currentRoom;
-  let playerId;
+  let currentLobby = null;
+  let playerId = null;
 
   ws.on('message', (raw) => {
     const msg = JSON.parse(raw.toString());
 
-    if (msg.type === 'host' || msg.type === 'join' || msg.type === 'solo') {
-      const code = msg.type === 'solo' ? `SOLO-${Math.floor(Math.random() * 1000)}` : (msg.code || `ROOM-${Math.floor(Math.random() * 1000)}`);
-      if (!rooms.has(code)) rooms.set(code, mkRoom(code));
-      currentRoom = rooms.get(code);
-      currentRoom.dungeonId = msg.dungeonId || 'd1';
-      currentRoom.difficulty = msg.difficulty || 'standard';
+    if (msg.type === 'create_lobby') {
       playerId = msg.playerId;
-
-      if (currentRoom.ghosts.has(playerId)) currentRoom.ghosts.delete(playerId);
-
-      const spawnCellX = Math.floor(Math.random() * 4) - 2;
-      const spawnCellY = Math.floor(Math.random() * 4) - 2;
-
-      currentRoom.players.set(playerId, {
+      const code = createLobbyCode();
+      const lobby = makeLobby(code, playerId);
+      lobby.dungeonId = msg.dungeonId || 'd1';
+      lobby.difficulty = msg.difficulty || 'standard';
+      lobby.clients.set(playerId, {
         id: playerId,
         ws,
-        name: msg.name,
-        cellX: spawnCellX,
-        cellY: spawnCellY,
-        x: spawnCellX * TILE_SIZE,
-        y: spawnCellY * TILE_SIZE,
-        targetX: spawnCellX * TILE_SIZE,
-        targetY: spawnCellY * TILE_SIZE,
-        hp: 100,
+        name: msg.name || `Player-${code}`,
+        ready: true,
+        spectator: false,
         characterId: msg.characterId,
-        djinn: msg.djinn,
-        statPenaltyTicks: 0
+        djinn: msg.djinn || []
       });
-
-      recalcBossChargeRequired(currentRoom);
-      ws.send(JSON.stringify({ type: 'joined', code }));
+      lobbyMap.set(code, lobby);
+      currentLobby = lobby;
+      ws.send(JSON.stringify({ type: 'joined_lobby', code, host: true }));
+      broadcastLobby(lobby);
+      if (msg.mode === 'solo') startRun(lobby);
+      return;
     }
 
-    if (msg.type === 'input' && currentRoom) {
-      const p = currentRoom.players.get(playerId);
-      if (p) applyInput(currentRoom, p, msg.payload);
+    if (msg.type === 'join_lobby') {
+      playerId = msg.playerId;
+      const code = (msg.code || '').toUpperCase().trim();
+      const lobby = lobbyMap.get(code);
+      if (!lobby) {
+        ws.send(JSON.stringify({ type: 'join_error', message: `Lobby ${code} not found` }));
+        return;
+      }
+      currentLobby = lobby;
+      lobby.dungeonId = msg.dungeonId || lobby.dungeonId;
+      lobby.difficulty = msg.difficulty || lobby.difficulty;
+      const spectator = lobby.inRun;
+      lobby.clients.set(playerId, {
+        id: playerId,
+        ws,
+        name: msg.name || `Guest-${code}`,
+        ready: spectator,
+        spectator,
+        characterId: msg.characterId,
+        djinn: msg.djinn || []
+      });
+      ws.send(JSON.stringify({ type: 'joined_lobby', code, host: lobby.hostId === playerId, spectator }));
+      broadcastLobby(lobby);
+      if (spectator) {
+        ws.send(JSON.stringify({ type: 'snapshot', state: roomSnapshot(lobby), lobby: lobbyView(lobby) }));
+      }
+      return;
     }
 
-    if (msg.type === 'pause' && currentRoom) {
+    if (!currentLobby || !playerId) return;
+
+    if (msg.type === 'set_ready') {
+      const c = currentLobby.clients.get(playerId);
+      if (c && !c.spectator) {
+        c.ready = Boolean(msg.ready);
+        broadcastLobby(currentLobby);
+      }
+    }
+
+    if (msg.type === 'start_run') {
+      if (playerId !== currentLobby.hostId || currentLobby.inRun) return;
+      const active = [...currentLobby.clients.values()].filter((c) => !c.spectator);
+      if (active.length === 0) return;
+      const allReady = active.every((c) => c.ready);
+      if (!allReady) {
+        ws.send(JSON.stringify({ type: 'start_denied', message: 'All non-spectator players must be ready.' }));
+        return;
+      }
+      startRun(currentLobby);
+      broadcastLobby(currentLobby);
+    }
+
+    if (msg.type === 'input' && currentLobby.inRun) {
+      const p = currentLobby.players.get(playerId);
+      if (p) applyInput(currentLobby, p, msg.payload);
+    }
+
+    if (msg.type === 'pause' && currentLobby.inRun) {
       if (msg.action === 'restart-room') {
-        currentRoom.objectiveProgress = 0;
-        if (currentRoom.roomIndex === 2) currentRoom.bossCharge = 0;
+        currentLobby.objectiveProgress = 0;
+        if (currentLobby.roomIndex === 2) currentLobby.bossCharge = 0;
       }
       if (msg.action === 'abandon-run') {
-        currentRoom.roomIndex = 0;
-        currentRoom.dungeonId = 'd1';
-        currentRoom.objectiveProgress = 0;
-        currentRoom.bossCharge = 0;
-        currentRoom.bossHP = 100;
-        currentRoom.bossPhase = 0;
+        currentLobby.roomIndex = 0;
+        currentLobby.objectiveProgress = 0;
+        currentLobby.objectiveRequired = 2;
+        currentLobby.bossCharge = 0;
+        currentLobby.bossHP = 100;
+        currentLobby.bossPhase = 0;
       }
     }
   });
 
   ws.on('close', () => {
-    if (currentRoom && playerId) {
-      const p = currentRoom.players.get(playerId);
+    if (!currentLobby || !playerId) return;
+    const c = currentLobby.clients.get(playerId);
+    if (!c) return;
+
+    currentLobby.clients.delete(playerId);
+    if (currentLobby.inRun) {
+      const p = currentLobby.players.get(playerId);
       if (p) {
-        currentRoom.players.delete(playerId);
-        currentRoom.ghosts.set(playerId, {
+        currentLobby.players.delete(playerId);
+        currentLobby.ghosts.set(playerId, {
           id: playerId,
           name: `${p.name} (ghost)`,
           x: p.x,
           y: p.y,
           ai: 'stay-near-party/avoid-hazards/contribute-nearest-objective'
         });
-        recalcBossChargeRequired(currentRoom);
+        recalcBossChargeRequired(currentLobby);
       }
     }
+
+    ensureHostOnDisconnect(currentLobby);
+    broadcastLobby(currentLobby);
+
+    if (currentLobby.clients.size === 0) lobbyMap.delete(currentLobby.code);
   });
 });
 

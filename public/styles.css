@@ -106,3 +106,15 @@ button, select, input { margin: 4px; background: #2e364f; color: white; border: 
   text-shadow: 1px 1px 0 #0f2744;
   pointer-events: auto;
 }
+
+#lobbyRoster {
+  margin-top: 10px;
+  padding: 8px;
+  border: 1px solid #6b7280;
+  background: #11182799;
+  min-height: 140px;
+  font-size: 13px;
+  white-space: pre-line;
+}
+#lobbyHint { margin-top: 8px; color: #c5d2ff; font-size: 12px; }
+#hostStartBtn[disabled], #readyBtn[disabled] { opacity: 0.5; }

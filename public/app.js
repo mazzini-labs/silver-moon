@@ -4,6 +4,7 @@ const state = {
   content: null,
   dungeons: null,
   ws: null,
+  runtime: { wsPath: '/ws', publicBaseUrl: '' },
   mode: 'solo',
   roomCode: '',
   playerId: `p-${Math.random().toString(16).slice(2, 8)}`,
@@ -12,12 +13,16 @@ const state = {
   selectedDjinn: [],
   dungeonId: 'd1',
   difficulty: 'standard',
+  lobby: null,
+  isHost: false,
+  isSpectator: false,
+  ready: false,
+  inRun: false,
   server: null,
   paused: false,
   verbIndex: 0,
   replayLog: [],
-  uiLog: [],
-  runtime: { wsPath: '/ws', publicBaseUrl: '' }
+  uiLog: []
 };
 
 const verbs = ['push_pull', 'lift_throw', 'pound', 'freeze', 'growth', 'tether', 'reveal', 'swap'];
@@ -25,8 +30,10 @@ const verbs = ['push_pull', 'lift_throw', 'pound', 'freeze', 'growth', 'tether',
 const screens = {
   play: document.getElementById('screen-play'),
   setup: document.getElementById('screen-setup'),
+  lobby: document.getElementById('screen-lobby'),
   options: document.getElementById('screen-options')
 };
+
 const hud = document.getElementById('hud');
 const partyEl = document.getElementById('party');
 const hotbarEl = document.getElementById('hotbar');
@@ -37,9 +44,15 @@ const debugEl = document.getElementById('debug');
 const pauseMenu = document.getElementById('pauseMenu');
 const confirmOverlayEl = document.getElementById('confirmOverlay');
 
+const lobbyCodeDisplay = document.getElementById('lobbyCodeDisplay');
+const lobbyRoleEl = document.getElementById('lobbyRole');
+const lobbyRosterEl = document.getElementById('lobbyRoster');
+const readyBtn = document.getElementById('readyBtn');
+const hostStartBtn = document.getElementById('hostStartBtn');
+
 function logUI(message) {
   state.uiLog.push(message);
-  if (state.uiLog.length > 12) state.uiLog.shift();
+  if (state.uiLog.length > 16) state.uiLog.shift();
 }
 
 class ConfirmChoiceOverlay {
@@ -66,15 +79,13 @@ class ConfirmChoiceOverlay {
     this.messageEl = this.root.querySelector('#confirmMessage');
     this.portraitWrap = this.root.querySelector('#confirmPortraits');
     this.buttons = [...this.root.querySelectorAll('.confirm-choice-btn')];
-
-    this.buttons.forEach((button) => {
-      button.onclick = () => this.confirm(Number(button.dataset.choice));
-      button.onmouseenter = () => this.setSelection(Number(button.dataset.choice));
+    this.buttons.forEach((b) => {
+      b.onclick = () => this.confirm(Number(b.dataset.choice));
+      b.onmouseenter = () => this.setSelection(Number(b.dataset.choice));
     });
   }
 
   isOpen() { return this.opened; }
-
   tone(freq, durationMs) {
     if (!this.audioCtx) this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const ctx = this.audioCtx;
@@ -90,7 +101,6 @@ class ConfirmChoiceOverlay {
     osc.start(now);
     osc.stop(now + durationMs / 1000 + 0.01);
   }
-
   playMove() { this.tone(540, 50); }
   playConfirm() { this.tone(860, 90); }
 
@@ -115,7 +125,6 @@ class ConfirmChoiceOverlay {
     this.opened = true;
     this.selection = 0;
     this.messageEl.textContent = message;
-
     const portraits = [this.getPortrait(characterId, 'yes'), this.getPortrait(characterId, 'no')];
     this.portraitWrap.innerHTML = '';
     this.portraits = portraits.map((src, i) => {
@@ -123,8 +132,6 @@ class ConfirmChoiceOverlay {
       img.className = 'confirm-portrait';
       img.src = src;
       img.draggable = false;
-      img.style.width = '24px';
-      img.style.height = '24px';
       img.style.imageRendering = 'pixelated';
       img.onmouseenter = () => this.setSelection(i);
       img.onclick = () => this.confirm(i);
@@ -132,7 +139,6 @@ class ConfirmChoiceOverlay {
       return img;
     });
     this.renderSelection();
-
     this.root.classList.remove('hidden');
     return new Promise((resolve) => { this.resolve = resolve; });
   }
@@ -162,52 +168,33 @@ function show(name) {
 }
 
 function buildPortraitFactory(characters) {
-  // Temporary 24x24 placeholders. Replace with authored sprite sheet at /public/sprites/portraits.png.
   const byId = new Map();
   const palette = ['#cc6655', '#f0b84a', '#66b3d9', '#82d17a', '#8a78d8', '#d96fb8', '#73d9c1', '#d9d56f'];
-
   for (let i = 0; i < characters.length; i += 1) {
     const c = document.createElement('canvas');
     c.width = 24;
     c.height = 24;
     const ctx = c.getContext('2d', { alpha: true });
     ctx.imageSmoothingEnabled = false;
-
-    ctx.fillStyle = '#111';
-    ctx.fillRect(0, 0, 24, 24);
-    ctx.fillStyle = '#222';
-    ctx.fillRect(1, 1, 22, 22);
-    ctx.fillStyle = '#f2d7b0';
-    ctx.fillRect(6, 5, 12, 10);
-    ctx.fillStyle = palette[i % palette.length];
-    ctx.fillRect(4, 3, 16, 5);
-    ctx.fillRect(6, 15, 12, 6);
-    ctx.fillStyle = '#000';
-    ctx.fillRect(9, 9, 2, 2);
-    ctx.fillRect(13, 9, 2, 2);
-
+    ctx.fillStyle = '#111'; ctx.fillRect(0, 0, 24, 24);
+    ctx.fillStyle = '#222'; ctx.fillRect(1, 1, 22, 22);
+    ctx.fillStyle = '#f2d7b0'; ctx.fillRect(6, 5, 12, 10);
+    ctx.fillStyle = palette[i % palette.length]; ctx.fillRect(4, 3, 16, 5); ctx.fillRect(6, 15, 12, 6);
+    ctx.fillStyle = '#000'; ctx.fillRect(9, 9, 2, 2); ctx.fillRect(13, 9, 2, 2);
     byId.set(characters[i].id, c.toDataURL());
   }
-
-  const tint = (base, mode) => {
+  return (characterId, mode) => {
+    const base = byId.get(characterId) || [...byId.values()][0];
     const c = document.createElement('canvas');
-    c.width = 24;
-    c.height = 24;
+    c.width = 24; c.height = 24;
     const ctx = c.getContext('2d', { alpha: true });
     ctx.imageSmoothingEnabled = false;
-    const img = new Image();
-    img.src = base;
+    const img = new Image(); img.src = base;
     ctx.drawImage(img, 0, 0);
     ctx.globalCompositeOperation = 'source-atop';
     ctx.fillStyle = mode === 'yes' ? 'rgba(50,230,120,0.25)' : 'rgba(240,100,100,0.25)';
     ctx.fillRect(0, 0, 24, 24);
-    ctx.globalCompositeOperation = 'source-over';
     return c.toDataURL();
-  };
-
-  return (characterId, mode) => {
-    const base = byId.get(characterId) || [...byId.values()][0];
-    return tint(base, mode);
   };
 }
 
@@ -223,41 +210,137 @@ state.runtime = { wsPath: runtime.wsPath || '/ws', publicBaseUrl: runtime.public
 const getPortrait = buildPortraitFactory(content.characters);
 const confirmOverlay = new ConfirmChoiceOverlay(confirmOverlayEl, getPortrait);
 
+function renderLobby() {
+  if (!state.lobby) return;
+  lobbyCodeDisplay.textContent = state.lobby.code;
+  lobbyRoleEl.textContent = state.isHost ? 'Role: Host' : state.isSpectator ? 'Role: Spectator (late join)' : 'Role: Guest';
+  const lines = state.lobby.players.map((p) => {
+    const host = p.id === state.lobby.hostId ? '[HOST] ' : '';
+    const ready = p.spectator ? 'spectator' : (p.ready ? 'ready' : 'not ready');
+    const you = p.id === state.playerId ? ' (you)' : '';
+    return `${host}${p.name}${you} — ${ready}`;
+  });
+  lobbyRosterEl.textContent = lines.join('\n');
+
+  readyBtn.disabled = state.isSpectator || state.inRun;
+  readyBtn.textContent = state.ready ? 'Set Not Ready' : 'Set Ready';
+
+  const allReady = state.lobby.players.filter((p) => !p.spectator).every((p) => p.ready);
+  hostStartBtn.disabled = !state.isHost || state.inRun || !allReady;
+}
+
+function connect() {
+  const base = state.runtime.publicBaseUrl || `${location.protocol}//${location.host}`;
+  const baseUrl = new URL(base, window.location.href);
+  const wsProto = baseUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsPath = state.runtime.wsPath || '/ws';
+  state.ws = new WebSocket(`${wsProto}//${baseUrl.host}${wsPath}`);
+
+  state.ws.onopen = () => {
+    const payload = {
+      playerId: state.playerId,
+      name: state.name,
+      characterId: state.characterId,
+      djinn: state.selectedDjinn.map((id) => ({ id, state: 'set' })),
+      dungeonId: state.dungeonId,
+      difficulty: state.difficulty
+    };
+    if (state.mode === 'host' || state.mode === 'solo') {
+      state.ws.send(JSON.stringify({ type: 'create_lobby', mode: state.mode, ...payload }));
+    } else {
+      state.ws.send(JSON.stringify({ type: 'join_lobby', code: state.roomCode, ...payload }));
+    }
+  };
+
+  state.ws.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === 'join_error') {
+      alert(msg.message);
+      show('play');
+      return;
+    }
+    if (msg.type === 'joined_lobby') {
+      state.roomCode = msg.code;
+      state.isHost = Boolean(msg.host);
+      state.isSpectator = Boolean(msg.spectator);
+      state.ready = state.mode === 'host' || state.mode === 'solo' || state.isSpectator;
+      logUI(`joined lobby ${msg.code}`);
+    }
+    if (msg.type === 'lobby_update') {
+      state.lobby = msg.lobby;
+      const me = state.lobby.players.find((p) => p.id === state.playerId);
+      if (me) {
+        state.ready = me.ready;
+        state.isSpectator = me.spectator;
+      }
+      renderLobby();
+    }
+    if (msg.type === 'start_denied') {
+      logUI(msg.message);
+      renderHUD();
+    }
+    if (msg.type === 'run_started') {
+      state.inRun = true;
+      state.server = msg.state;
+      state.lobby = msg.lobby;
+      hud.classList.remove('hidden');
+      show('play');
+      screens.play.classList.remove('active');
+      renderHUD();
+      syncMeshes();
+      logUI('run started');
+    }
+    if (msg.type === 'snapshot') {
+      state.server = msg.state;
+      if (msg.lobby) state.lobby = msg.lobby;
+      if (state.inRun) {
+        renderHUD();
+        syncMeshes();
+      }
+    }
+  };
+}
+
+async function askYesNo(message) {
+  const result = await confirmOverlay.open(message, state.characterId);
+  logUI(`confirm ${message} => ${result === null ? 'cancel' : result ? 'yes' : 'no'}`);
+  return result;
+}
+
+// UI wiring
 const dungeonSelect = document.getElementById('dungeonSelect');
 content.dungeons.forEach((d) => {
-  const op = document.createElement('option');
-  op.value = d.id;
-  op.textContent = `${d.name} (${d.id})`;
-  dungeonSelect.append(op);
+  const op = document.createElement('option'); op.value = d.id; op.textContent = `${d.name} (${d.id})`; dungeonSelect.append(op);
 });
-
 const avatarSelect = document.getElementById('avatarSelect');
 content.characters.forEach((c) => {
-  const op = document.createElement('option');
-  op.value = c.id;
-  op.textContent = `${c.element}/${c.weapon} - ${c.name}`;
-  avatarSelect.append(op);
+  const op = document.createElement('option'); op.value = c.id; op.textContent = `${c.element}/${c.weapon} - ${c.name}`; avatarSelect.append(op);
 });
-
 const djinnSelect = document.getElementById('djinnSelect');
 Object.values(content.djinn).flat().forEach((d) => {
-  const op = document.createElement('option');
-  op.value = d.id;
-  op.textContent = `${d.name}: ${d.active}`;
-  djinnSelect.append(op);
+  const op = document.createElement('option'); op.value = d.id; op.textContent = `${d.name}: ${d.active}`; djinnSelect.append(op);
 });
 
 for (const btn of document.querySelectorAll('[data-mode]')) {
   btn.onclick = () => {
     state.mode = btn.dataset.mode;
-    if (btn.dataset.mode === 'join') state.roomCode = document.getElementById('joinCode').value || 'ROOM-100';
+    if (btn.dataset.mode === 'join') state.roomCode = (document.getElementById('joinCode').value || '').toUpperCase().trim();
     show('setup');
   };
 }
 document.getElementById('optionsBtn').onclick = () => show('options');
 document.getElementById('closeOptions').onclick = () => show('setup');
 
-// --- Three.js renderer and Golden-Sun-style oblique perspective camera ---
+readyBtn.onclick = () => {
+  if (!state.ws || state.ws.readyState !== 1 || state.isSpectator || state.inRun) return;
+  state.ws.send(JSON.stringify({ type: 'set_ready', ready: !state.ready }));
+};
+hostStartBtn.onclick = () => {
+  if (!state.ws || state.ws.readyState !== 1 || !state.isHost) return;
+  state.ws.send(JSON.stringify({ type: 'start_run' }));
+};
+
+// Three.js scene
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
@@ -268,10 +351,9 @@ scene.background = new THREE.Color('#2a3550');
 
 const CAMERA_FOV = 33;
 const CAMERA_PITCH_DEG = 40;
-const CAMERA_YAW_DEG = 50; // 45 + 5 axis bias (intentionally non-symmetric)
+const CAMERA_YAW_DEG = 50;
 const CAMERA_DISTANCE = 23;
 const camera = new THREE.PerspectiveCamera(CAMERA_FOV, window.innerWidth / window.innerHeight, 0.1, 150);
-
 function updateCameraForRoom(roomCenterX, roomCenterZ) {
   const pitch = THREE.MathUtils.degToRad(CAMERA_PITCH_DEG);
   const yaw = THREE.MathUtils.degToRad(CAMERA_YAW_DEG);
@@ -281,11 +363,10 @@ function updateCameraForRoom(roomCenterX, roomCenterZ) {
   const z = roomCenterZ + horizontal * Math.cos(yaw);
   camera.position.set(x, y, z);
   camera.lookAt(roomCenterX, 1.2, roomCenterZ);
-  camera.rotation.z = 0; // no roll
+  camera.rotation.z = 0;
 }
 updateCameraForRoom(0, 0);
 
-// Flat lighting only
 scene.add(new THREE.AmbientLight(0xffffff, 0.85));
 const dir = new THREE.DirectionalLight(0xffffff, 0.62);
 dir.position.set(8, 14, 6);
@@ -312,7 +393,6 @@ for (let x = -7; x <= 7; x += 1) {
     const tile = new THREE.Mesh(new THREE.BoxGeometry(1, 0.1, 1), tileMat);
     tile.position.set(x, -0.05, z);
     world.add(tile);
-
     if ((Math.abs(x) === 7 || Math.abs(z) === 7) && (x + z) % 2 === 0) {
       const wall = new THREE.Mesh(new THREE.BoxGeometry(1, 2.3, 1), matWall.clone());
       wall.position.set(x, 1.1, z);
@@ -326,35 +406,18 @@ function createDioramaBuilding(cfg) {
   const { x, z, w, d, h, roofH } = cfg;
   const building = new THREE.Group();
   building.position.set(x, 0, z);
-
   const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), matHouse);
   body.position.set(0, h / 2, 0);
-
   const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 0.7, roofH, d + 0.9), matRoof.clone());
   roof.position.set(0, h + roofH / 2, 0);
-
-  // chunkier, non-uniform prop scaling and compressed interior feel
   body.scale.set(1.15, 0.82, 1.35);
   roof.scale.set(1.22, 1.45, 1.38);
-
   const door = new THREE.Mesh(new THREE.BoxGeometry(0.65, 1.1, 0.12), matDoor);
-  // diagonal arrangement with readable entrance from fixed oblique camera
   door.position.set(-w * 0.18, 0.55, d * 0.52);
-
   building.add(body, roof, door);
   world.add(building);
-
-  roofs.push({
-    mesh: roof,
-    footprint: {
-      minX: x - (w * 0.75),
-      maxX: x + (w * 0.75),
-      minZ: z - (d * 0.75),
-      maxZ: z + (d * 0.75)
-    }
-  });
+  roofs.push({ mesh: roof, footprint: { minX: x - (w * 0.75), maxX: x + (w * 0.75), minZ: z - (d * 0.75), maxZ: z + (d * 0.75) } });
 }
-
 createDioramaBuilding({ x: -4.2, z: -2.6, w: 2.5, d: 1.7, h: 1.8, roofH: 0.7 });
 createDioramaBuilding({ x: -1.0, z: 0.6, w: 2.3, d: 1.6, h: 1.7, roofH: 0.65 });
 createDioramaBuilding({ x: 2.2, z: 3.1, w: 2.7, d: 1.9, h: 1.9, roofH: 0.75 });
@@ -379,7 +442,6 @@ function applyOcclusionDiscipline() {
       if (inside) roof.mesh.material.opacity = 0.18;
     }
   }
-
   for (const mesh of playerMeshes.values()) {
     const dirVec = mesh.position.clone().sub(camera.position).normalize();
     ray.set(camera.position, dirVec);
@@ -390,41 +452,10 @@ function applyOcclusionDiscipline() {
   }
 }
 
-function connect() {
-  const base = state.runtime.publicBaseUrl || `${location.protocol}//${location.host}`;
-  const baseUrl = new URL(base, window.location.href);
-  const wsProto = baseUrl.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsPath = state.runtime.wsPath || '/ws';
-  state.ws = new WebSocket(`${wsProto}//${baseUrl.host}${wsPath}`);
-  state.ws.onopen = () => {
-    state.ws.send(JSON.stringify({
-      type: state.mode,
-      code: state.roomCode,
-      playerId: state.playerId,
-      name: state.name,
-      characterId: state.characterId,
-      djinn: state.selectedDjinn.map((id) => ({ id, state: 'set' })),
-      dungeonId: state.dungeonId,
-      difficulty: state.difficulty
-    }));
-  };
-  state.ws.onmessage = (ev) => {
-    const msg = JSON.parse(ev.data);
-    if (msg.type === 'joined') state.roomCode = msg.code;
-    if (msg.type === 'snapshot') {
-      state.server = msg.state;
-      renderHUD();
-      syncMeshes();
-    }
-  };
-}
-
 function syncMeshes() {
   if (!state.server) return;
-
   for (const p of state.server.players) {
     if (!playerMeshes.has(p.id)) {
-      // Slightly oversized characters for readability against props/doors.
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.6, 1.0), matPlayer.clone());
       mesh.material.color = new THREE.Color(p.id === state.playerId ? '#ffe066' : '#ff9f66');
       scene.add(mesh);
@@ -463,54 +494,37 @@ function renderHUD() {
   if (!state.server) return;
   partyEl.innerHTML = `<b>Party (${state.server.players.length}/8)</b><br>${state.server.players.map((p) => `${p.name} HP:${Math.round(p.hp)} Djinn:${p.djinn.filter((d) => d.state === 'set').length}/${p.djinn.length}`).join('<br>')}`;
   hotbarEl.innerHTML = verbs.map((v, i) => `<span ${i === state.verbIndex ? 'style="color:#00ffcc"' : ''}>[${i + 1}] ${v}</span>`).join(' | ');
-
   const objectiveLine = state.server.roomIndex < 2
     ? `Contribute to room seals (${state.server.objectiveProgress}/${state.server.objectiveRequired}).`
     : `Charge boss seals asynchronously (${state.server.bossCharge}/${state.server.bossChargeRequired}) then fire spotlight verbs.`;
-
-  hintEl.innerHTML = `<b>Objective hints</b><br>${objectiveLine}<br>Ping: middle-click mark target/danger/go here.`;
+  hintEl.innerHTML = `<b>Objective hints</b><br>${objectiveLine}<br>Late join policy: spectator only after run start.`;
   bossEl.innerHTML = `<b>Boss phase</b><br>Phase ${state.server.bossPhase + 1} HP ${state.server.bossHP}<br>Spotlight: ${(state.server.bossSpotlightVerbs || []).join(', ')}`;
   minimapEl.innerHTML = `Dungeon ${state.server.dungeonId}<br>Room ${state.server.roomIndex + 1}/3<br>Lobby ${state.roomCode || 'pending'}`;
-  debugEl.innerHTML = `<b>Debug overlay</b><br>Tick:${state.server.tick}<br>Traces:${state.server.traces.map((t) => t.verb || t.summon || 'boss-charge').join(', ')}<br>UI:${state.uiLog.slice(-4).join(' | ')}<br>Replay:${state.replayLog.slice(-3).join(' | ')}`;
+  debugEl.innerHTML = `<b>Debug overlay</b><br>Tick:${state.server.tick}<br>Traces:${state.server.traces.map((t) => t.verb || t.summon || 'boss-charge').join(', ')}<br>UI:${state.uiLog.slice(-5).join(' | ')}<br>Replay:${state.replayLog.slice(-3).join(' | ')}`;
 }
 
 function sendInput(payload) {
-  if (!state.ws || state.ws.readyState !== 1) return;
+  if (!state.ws || state.ws.readyState !== 1 || !state.inRun || state.isSpectator) return;
   state.replayLog.push(JSON.stringify(payload));
   state.ws.send(JSON.stringify({ type: 'input', payload }));
-}
-
-async function askYesNo(message) {
-  const result = await confirmOverlay.open(message, state.characterId);
-  logUI(`confirm ${message} => ${result === null ? 'cancel' : result ? 'yes' : 'no'}`);
-  return result;
 }
 
 window.addEventListener('keydown', async (e) => {
   if (confirmOverlay.isOpen()) {
     const key = e.key.toLowerCase();
-    if (key === 'arrowleft' || key === 'arrowup') {
-      e.preventDefault();
-      confirmOverlay.setSelection(0);
-    } else if (key === 'arrowright' || key === 'arrowdown') {
-      e.preventDefault();
-      confirmOverlay.setSelection(1);
-    } else if (key === 'enter' || key === ' ') {
-      e.preventDefault();
-      confirmOverlay.confirm(confirmOverlay.selection);
-    } else if (key === 'escape') {
-      e.preventDefault();
-      confirmOverlay.cancel();
-    }
+    if (key === 'arrowleft' || key === 'arrowup') { e.preventDefault(); confirmOverlay.setSelection(0); }
+    else if (key === 'arrowright' || key === 'arrowdown') { e.preventDefault(); confirmOverlay.setSelection(1); }
+    else if (key === 'enter' || key === ' ') { e.preventDefault(); confirmOverlay.confirm(confirmOverlay.selection); }
+    else if (key === 'escape') { e.preventDefault(); confirmOverlay.cancel(); }
     return;
   }
 
-  if (e.key === 'Escape') {
+  if (e.key === 'Escape' && state.inRun) {
     state.paused = !state.paused;
     pauseMenu.classList.toggle('hidden', !state.paused);
     return;
   }
-  if (state.paused) return;
+  if (!state.inRun || state.paused || state.isSpectator) return;
 
   const key = e.key.toLowerCase();
   const dirs = { w: 'up', a: 'left', s: 'down', d: 'right' };
@@ -525,9 +539,7 @@ window.addEventListener('keydown', async (e) => {
   if (key === 'f') sendInput({ type: 'contribute' });
   if (key === 'y') {
     const result = await askYesNo('abandon run?');
-    if (result === true && state.ws?.readyState === 1) {
-      state.ws.send(JSON.stringify({ type: 'pause', action: 'abandon-run' }));
-    }
+    if (result === true && state.ws?.readyState === 1) state.ws.send(JSON.stringify({ type: 'pause', action: 'abandon-run' }));
   }
 });
 
@@ -550,7 +562,6 @@ for (const btn of document.querySelectorAll('[data-pause]')) {
       pauseMenu.classList.add('hidden');
       return;
     }
-
     const prompt = action === 'restart-room' ? 'restart room?' : 'abandon run?';
     const result = await askYesNo(prompt);
     if (result === true && state.ws?.readyState === 1) {
@@ -570,10 +581,8 @@ document.getElementById('startBtn').onclick = () => {
   state.dungeonId = dungeonSelect.value;
   state.difficulty = document.getElementById('difficultySelect').value;
   connect();
-  hud.classList.remove('hidden');
-  show('play');
-  screens.play.classList.remove('active');
-  logUI('run started');
+  show('lobby');
+  logUI('connecting to lobby...');
 };
 
 function animate() {

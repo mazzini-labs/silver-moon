@@ -1,174 +1,142 @@
 # Silver Moon (Prototype)
 
-Web-based three.js + WebSocket prototype implementing a co-op puzzle-dungeon run loop.
+Silver Moon is a browser game with a Node.js authoritative simulation server.
 
-This guide is intentionally written for both:
-- **non-dev players** (just run and play), and
-- **devs/hosts** (LAN/public hosting, ports, env vars, troubleshooting).
+This guide is for both non-dev players and dev hosts.
 
 ---
 
-## 1) What this repo actually runs
+## Quick reality check: does this project have a real lobby?
 
-Silver Moon is a **single Node process** (`server.js`) that serves:
-- the web client (`public/*`) over HTTP, and
-- the multiplayer WebSocket endpoint from the same server.
+**Yes (now).**
 
-The client loads game data from:
-- `GET /api/content`
-- `GET /api/dungeons`
-- `GET /api/runtime` (runtime networking config)
+Current flow in code:
+1. Host creates a lobby over WebSocket (`create_lobby`) and receives a short 5-char code.
+2. Guests join by entering that code (`join_lobby`).
+3. Lobby screen shows roster + ready state.
+4. **Only host** can start run (`start_run`), and all clients transition together.
+5. Late join policy: **spectator after run has started** (no mid-room spawn).
 
-Then it opens a WebSocket to `ws://<host><WS_PATH>` (or `wss://...` if HTTPS/public URL says so).
+Server authority remains on WebSocket state; REST endpoints are informational.
 
 ---
 
-## 2) Prerequisites
+## Requirements
 
-- **Node.js 20+** (22 recommended)
-- **npm**
+- Node.js 20+
+- npm
 - Chrome or Firefox
-
-Check versions:
 
 ```bash
 node -v
 npm -v
 ```
 
----
-
-## 3) Install
-
-From repo root:
+Install dependencies:
 
 ```bash
 npm install
 ```
 
-Scripts in this repo:
+---
+
+## Scripts
+
+Both scripts run the same server process:
 
 ```bash
 npm run dev
 npm start
 ```
 
-Both scripts currently run the same server (`node server.js`).
-
 ---
 
-## 4) Environment variables (networking/runtime)
+## Runtime networking config (env vars)
 
-The server now supports these env vars:
+The server supports:
 
-- `PORT` (default: `3000`)
-- `HOST` (default: `0.0.0.0`)
-- `WS_PATH` (default: `/ws`)
-- `PUBLIC_BASE_URL` (default: empty)
+- `PORT` (default `3000`)
+- `HOST` (default `0.0.0.0`)
+- `WS_PATH` (default `/ws`)
+- `PUBLIC_BASE_URL` (default empty)
 
-### What they do
+### What these affect
 
-- `PORT`: HTTP + WS listen port.
-- `HOST`: bind interface (`0.0.0.0` for LAN/public reachability, `127.0.0.1` local-only).
-- `WS_PATH`: WebSocket route path used by both server and client runtime config.
-- `PUBLIC_BASE_URL`: optional external URL hint used by client to build WS URL (useful behind reverse proxy / domain).
+- HTTP served on `http://HOST:PORT`
+- WebSocket endpoint served on `ws(s)://host<WS_PATH>`
+- Client reads runtime config from `/api/runtime` and builds its WebSocket URL from `wsPath` + optional `publicBaseUrl`
 
-### Examples
+### Example starts
 
 Linux/macOS:
 
 ```bash
-PORT=3000 HOST=0.0.0.0 WS_PATH=/ws npm run dev
+HOST=0.0.0.0 PORT=3000 WS_PATH=/ws npm run dev
 ```
 
 Windows PowerShell:
 
 ```powershell
-$env:PORT="3000"; $env:HOST="0.0.0.0"; $env:WS_PATH="/ws"; npm run dev
+$env:HOST="0.0.0.0"; $env:PORT="3000"; $env:WS_PATH="/ws"; npm run dev
 ```
-
-Server startup log includes effective URL + WS path.
 
 ---
 
-## 5) Local single-player (same machine)
+## 1) Local single-player
 
-1. Install deps:
+1. Install and start:
 
 ```bash
 npm install
-```
-
-2. Start server:
-
-```bash
 npm run dev
 ```
 
-3. Open browser:
+2. Open:
 
 ```text
 http://localhost:3000
 ```
 
-4. In menu:
-   - click **Play Solo**
-   - pick dungeon/loadout/difficulty
-   - click **Start Dungeon Run**
+3. Click `Play Solo`.
+4. Choose dungeon/loadout/difficulty.
+5. Click `Start Dungeon Run`.
 
-Notes:
-- Solo uses a generated room code (`SOLO-###`) on connect.
-- You can see current lobby code in HUD minimap panel after joining.
+What actually happens:
+- client creates a lobby with mode `solo`
+- server auto-starts run immediately for solo host
 
 ---
 
-## 6) Host multiplayer on LAN
+## 2) Hosting multiplayer on LAN
 
-### Host machine
+### Host
 
-1. Start server bound for LAN:
+1. Run server:
 
 ```bash
 HOST=0.0.0.0 PORT=3000 WS_PATH=/ws npm start
 ```
 
-2. Find host LAN IP (example `192.168.1.50`).
+2. Find your LAN IP (example: `192.168.1.50`).
+3. Open `http://192.168.1.50:3000` in browser.
+4. Click `Host`, configure setup, then `Start Dungeon Run`.
+5. In lobby screen, share the displayed 5-char code.
+6. Wait for guests to be ready.
+7. Click `Host Start Dungeon Run`.
 
-3. Open in browser:
+### Guest (LAN)
 
-```text
-http://192.168.1.50:3000
-```
-
-4. Click **Host**.
-   - Optional: enter a room code in the "Room code" box before pressing Host.
-   - If left empty, server generates `ROOM-###`.
-
-5. Go through setup and click **Start Dungeon Run**.
-
-6. Share with guests:
-   - host URL (e.g. `http://192.168.1.50:3000`)
-   - room code (shown in host HUD after join)
-
-### Guest on LAN
-
-1. Open host URL in browser:
-
-```text
-http://192.168.1.50:3000
-```
-
-2. Enter the host room code in **Room code** input.
-3. Click **Join**.
-4. Complete setup and click **Start Dungeon Run**.
+1. Open host URL (same LAN IP + port).
+2. Enter lobby code in the first screen's room-code box.
+3. Click `Join`.
+4. Configure setup, click `Start Dungeon Run` (this joins lobby, does not force start).
+5. Toggle `Set Ready`; wait for host to start.
 
 ---
 
-## 7) Host multiplayer on the public internet (basic)
+## 3) Hosting multiplayer on the public internet (basic)
 
-> Basic direct-port-forward flow (no auth/proxy hardening).
-
-### On host machine
+> Basic direct setup only (no auth/hardening).
 
 1. Start server:
 
@@ -176,127 +144,143 @@ http://192.168.1.50:3000
 HOST=0.0.0.0 PORT=3000 WS_PATH=/ws npm start
 ```
 
-2. Router/NAT: forward TCP `3000` to host machine.
-3. Firewall: allow inbound TCP `3000`.
-4. Share your public URL, e.g.:
+2. Forward router TCP port `3000` to host machine.
+3. Open firewall for TCP `3000`.
+4. Share URL: `http://<public-ip>:3000`.
 
-```text
-http://<your-public-ip>:3000
-```
-
-### Optional domain / reverse proxy
-
-If served behind a domain/proxy, set public base URL so client constructs WS URL correctly:
+Optional proxy/domain setup:
 
 ```bash
 HOST=0.0.0.0 PORT=3000 WS_PATH=/ws PUBLIC_BASE_URL=https://play.example.com npm start
 ```
 
-### Public guest
-
-1. Open host public URL (IP or domain).
-2. Enter room code.
-3. Click **Join**.
-4. Setup + Start.
+This helps client websocket URL generation when externally addressed by domain.
 
 ---
 
-## 8) Lobby / room-code flow (actual behavior in code)
+## 4) Joining as a guest (LAN + public)
 
-- Connection mode is sent on websocket open as one of: `solo`, `host`, `join`.
-- Server behavior:
-  - `solo` -> always generates `SOLO-<random>`
-  - `host`/`join` -> uses provided `code` if present; otherwise generates `ROOM-<random>`
-- Server responds with `{"type":"joined","code":"..."}` and client stores this as current room code.
-- Room code appears in HUD minimap line as `Lobby <code>` after connected.
+Guest needs:
+- host URL (`http://host:port`)
+- lobby code (5 chars)
 
-Important UI detail:
-- The room-code input is on the first screen. For **Join**, enter code before pressing **Join**.
+Steps:
+1. Open host URL.
+2. Enter code.
+3. Click `Join`.
+4. Complete setup and join lobby.
+5. Set ready.
+
+If joining after run start:
+- guest is marked **spectator** (roster shows spectator status).
 
 ---
 
-## 9) Quick host+guest verification checklist
+## Lobby + run flow (actual code behavior)
 
-### Host checks
+WebSocket message flow:
+- host: `create_lobby`
+- guest: `join_lobby` with code
+- server sends `joined_lobby`
+- server broadcasts `lobby_update` with roster/ready/host/spectator state
+- host sends `start_run`
+- server validates host + readiness, then emits `run_started`
+- server emits continuous `snapshot` updates while in run
 
-1. API reachable:
+REST endpoints used:
+- `/api/content`
+- `/api/dungeons`
+- `/api/runtime`
+- `/api/lobbies` (informational list of active lobbies)
+
+---
+
+## Quick verification checklist (host + guest)
+
+### Host verify API
 
 ```bash
-curl http://localhost:3000/api/content
 curl http://localhost:3000/api/runtime
+curl http://localhost:3000/api/content
+curl http://localhost:3000/api/lobbies
 ```
 
-2. Confirm `/api/runtime` shows expected `wsPath`, `host`, `port`.
-3. Open game and start a hosted room.
+Expected:
+- `/api/runtime` returns configured host/port/wsPath.
+- `/api/lobbies` shows lobby after host creates one.
 
-### Guest checks
+### Two-client verification
 
-1. Open same host URL.
-2. Enter room code and join.
-3. After both are in-run, verify party list shows 2 players.
-4. Move one player and verify remote movement updates.
+1. Open two browser tabs/windows to host URL.
+2. Host creates lobby and notes code.
+3. Guest joins same code.
+4. Confirm roster shows 2 players.
+5. Both set ready (host auto-ready by default).
+6. Host starts run.
+7. Confirm both transition into run and appear in party list.
 
 ---
 
-## 10) Troubleshooting
+## Troubleshooting
 
-### "EADDRINUSE" / "address already in use"
+### 1) `EADDRINUSE` / address already in use
 
-Another process is already using the port.
+Port already occupied.
 
-- Use different port:
+Use different port:
 
 ```bash
 PORT=3010 npm run dev
 ```
 
-- Or stop old process (Linux/macOS):
+Or stop existing process (Linux/macOS):
 
 ```bash
 lsof -i :3000
 kill <pid>
 ```
 
-### Guests cannot connect on LAN/public
+### 2) Guests cannot join lobby
 
-- Ensure host started with `HOST=0.0.0.0`.
-- Verify firewall/router allow TCP port (default 3000).
-- Confirm guests use correct host URL + port.
+- Ensure guest used same URL/port as host.
+- Ensure lobby code is exact 5-char code displayed by host.
+- Confirm host actually reached lobby screen (code exists only after lobby create).
 
-### WebSocket connection fails
+### 3) WebSocket connection failure
 
-- Verify `WS_PATH` matches on both sides (client reads from `/api/runtime`).
-- Check browser console/network for failed `ws://.../ws` handshake.
-- If HTTPS domain is used, websocket must be `wss://` reachable.
+- Verify `/api/runtime` `wsPath` and server `WS_PATH` match.
+- Verify browser can reach `ws://host:port/ws` (or configured path).
+- On HTTPS/public domain, ensure `wss://` is reachable.
 
-### Mixed-version mismatch (host and guest behavior differs)
+### 4) Firewall/router problems
 
-- Ask all players to hard refresh (`Ctrl+F5` / clear cache).
-- Restart host server after pulling latest changes.
+- LAN: host firewall must allow inbound chosen port.
+- Public: router port forward + firewall both required.
 
-### Reading server logs
+### 5) Mixed-version mismatch
 
-- Startup log prints bind host/port and WS path.
-- Keep terminal open while hosting to observe runtime errors.
+- Restart host server after updating code.
+- Guests hard-refresh browser (Ctrl+F5).
+- Ensure everyone loads same host URL.
+
+### 6) Reading server logs
+
+Server prints startup bind info:
+- host/port
+- ws path
+- optional public base url
+
+Keep terminal open while hosting to catch runtime errors.
 
 ---
 
-## 11) Controls (current)
+## Controls
 
 - Move: `W A S D`
 - Verbs: `1..8`
-- Djinn technique: `Q`
+- Djinn: `Q`
 - Summon: `E`
-- Contribute objective: `F`
-- Demo confirm prompt: `Y`
-- Pause menu: `Esc`
+- Contribute: `F`
+- Confirm demo prompt: `Y`
+- Pause: `Esc`
 
----
-
-## 12) Developer notes
-
-- Dev command and start command are equivalent right now.
-- Core runtime files:
-  - `server.js` (Express + WS authoritative state)
-  - `public/app.js` (UI flow, render loop, websocket client)
-  - `data/content.json`, `data/dungeons.json` (content definitions)

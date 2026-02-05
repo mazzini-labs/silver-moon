@@ -16,7 +16,8 @@ const state = {
   paused: false,
   verbIndex: 0,
   replayLog: [],
-  uiLog: []
+  uiLog: [],
+  runtime: { wsPath: '/ws', publicBaseUrl: '' }
 };
 
 const verbs = ['push_pull', 'lift_throw', 'pound', 'freeze', 'growth', 'tether', 'reveal', 'swap'];
@@ -210,12 +211,14 @@ function buildPortraitFactory(characters) {
   };
 }
 
-const [content, dungeons] = await Promise.all([
+const [content, dungeons, runtime] = await Promise.all([
   fetch('/api/content').then((r) => r.json()),
-  fetch('/api/dungeons').then((r) => r.json())
+  fetch('/api/dungeons').then((r) => r.json()),
+  fetch('/api/runtime').then((r) => r.json()).catch(() => ({ wsPath: '/ws', publicBaseUrl: '' }))
 ]);
 state.content = content;
 state.dungeons = dungeons;
+state.runtime = { wsPath: runtime.wsPath || '/ws', publicBaseUrl: runtime.publicBaseUrl || '' };
 
 const getPortrait = buildPortraitFactory(content.characters);
 const confirmOverlay = new ConfirmChoiceOverlay(confirmOverlayEl, getPortrait);
@@ -388,7 +391,11 @@ function applyOcclusionDiscipline() {
 }
 
 function connect() {
-  state.ws = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}`);
+  const base = state.runtime.publicBaseUrl || `${location.protocol}//${location.host}`;
+  const baseUrl = new URL(base, window.location.href);
+  const wsProto = baseUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsPath = state.runtime.wsPath || '/ws';
+  state.ws = new WebSocket(`${wsProto}//${baseUrl.host}${wsPath}`);
   state.ws.onopen = () => {
     state.ws.send(JSON.stringify({
       type: state.mode,
@@ -463,7 +470,7 @@ function renderHUD() {
 
   hintEl.innerHTML = `<b>Objective hints</b><br>${objectiveLine}<br>Ping: middle-click mark target/danger/go here.`;
   bossEl.innerHTML = `<b>Boss phase</b><br>Phase ${state.server.bossPhase + 1} HP ${state.server.bossHP}<br>Spotlight: ${(state.server.bossSpotlightVerbs || []).join(', ')}`;
-  minimapEl.innerHTML = `Dungeon ${state.server.dungeonId}<br>Room ${state.server.roomIndex + 1}/3`;
+  minimapEl.innerHTML = `Dungeon ${state.server.dungeonId}<br>Room ${state.server.roomIndex + 1}/3<br>Lobby ${state.roomCode || 'pending'}`;
   debugEl.innerHTML = `<b>Debug overlay</b><br>Tick:${state.server.tick}<br>Traces:${state.server.traces.map((t) => t.verb || t.summon || 'boss-charge').join(', ')}<br>UI:${state.uiLog.slice(-4).join(' | ')}<br>Replay:${state.replayLog.slice(-3).join(' | ')}`;
 }
 

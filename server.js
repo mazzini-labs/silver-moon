@@ -6,15 +6,23 @@ import fs from 'fs';
 const content = JSON.parse(fs.readFileSync('./data/content.json', 'utf8'));
 const dungeonDefs = JSON.parse(fs.readFileSync('./data/dungeons.json', 'utf8'));
 
+const PORT = Number.parseInt(process.env.PORT || '3000', 10);
+const HOST = process.env.HOST || '0.0.0.0';
+const WS_PATH = process.env.WS_PATH || '/ws';
+const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || '';
+
 const TICK_RATE = 20;
 const TILE_SIZE = content.tileSize;
 const app = express();
 app.use(express.static('public'));
 app.get('/api/content', (_req, res) => res.json(content));
 app.get('/api/dungeons', (_req, res) => res.json(dungeonDefs));
+app.get('/api/runtime', (_req, res) => {
+  res.json({ port: PORT, host: HOST, wsPath: WS_PATH, publicBaseUrl: PUBLIC_BASE_URL });
+});
 
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({ server, path: WS_PATH });
 
 const rooms = new Map();
 
@@ -253,5 +261,7 @@ wss.on('connection', (ws) => {
   });
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Silver Moon running at http://localhost:${PORT}`));
+server.listen(PORT, HOST, () => {
+  console.log(`Silver Moon running at http://${HOST}:${PORT} (WS path: ${WS_PATH})`);
+  if (PUBLIC_BASE_URL) console.log(`Public base URL override: ${PUBLIC_BASE_URL}`);
+});

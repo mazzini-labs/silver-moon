@@ -283,4 +283,15 @@ Keep terminal open while hosting to catch runtime errors.
 - Contribute: `F`
 - Confirm demo prompt: `Y`
 - Pause: `Esc`
+- Theme preview toggle (dev): `T`
 
+
+## DOM UI Theme (GBA style)
+
+UI is rendered in a fixed internal resolution DOM container (`480x270`) and scaled by an integer factor to fit screen (`2x/3x/4x...`) with nearest-neighbor settings.
+
+- Theme file: `public/ui-theme.css`
+- Pixel-font style currently uses a monospace fallback (no bundled binary font files).
+- Screens/panels use shared classes: `.ui-panel`, `.ui-subpanel`, `.ui-btn`, `.ui-select`, `.ui-input`, `.ui-kv`, `.ui-row`, `.ui-col`, `.ui-focus`.
+
+This keeps menu/HUD/dialog visuals consistent with the Golden Sun/GBA frame style.

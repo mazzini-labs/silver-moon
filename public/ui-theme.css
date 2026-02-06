@@ -1,0 +1,136 @@
+:root{
+  --ui-border-dark:#0b1116;
+  --ui-border-mid:#2c3a45;
+  --ui-border-light:#d9e5ee;
+  --ui-fill-1:#0a566e;
+  --ui-fill-2:#0b4d62;
+  --ui-text:#ffffff;
+  --ui-text-shadow:#13222c;
+  --ui-pad:10px;
+  --ui-gap:8px;
+  --ui-outer:6px;
+  --ui-inner:2px;
+}
+
+
+
+.ui-root, .ui-root * {
+  font-family:monospace;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  -ms-interpolation-mode: nearest-neighbor;
+  -webkit-font-smoothing: none;
+  text-rendering: geometricPrecision;
+  box-sizing: border-box;
+}
+
+.ui-scale{
+  position:fixed;
+  left:0;
+  top:0;
+  transform-origin: top left;
+  z-index:3;
+  pointer-events:none;
+}
+
+.ui-internal{
+  width:480px;
+  height:270px;
+  position:relative;
+}
+
+.ui-panel, .ui-subpanel{
+  position:relative;
+  background: linear-gradient(var(--ui-fill-1), var(--ui-fill-2));
+  border: var(--ui-outer) solid var(--ui-border-dark);
+  border-radius: 0;
+  box-shadow: none;
+  padding: var(--ui-pad);
+}
+.ui-subpanel{ padding: 8px; border-width:4px; }
+
+.ui-panel::before, .ui-subpanel::before{
+  content:"";
+  position:absolute;
+  left: calc(var(--ui-outer) * -1 + var(--ui-inner));
+  top:  calc(var(--ui-outer) * -1 + var(--ui-inner));
+  right:calc(var(--ui-outer) * -1 + var(--ui-inner));
+  bottom:calc(var(--ui-outer) * -1 + var(--ui-inner));
+  border: var(--ui-inner) solid var(--ui-border-light);
+  pointer-events:none;
+}
+
+.ui-text{ color:var(--ui-text); text-shadow:1px 1px 0 var(--ui-text-shadow); line-height:1.05; }
+.ui-title{ font-size:13px; }
+.ui-small{ font-size:9px; }
+
+.ui-row{ display:flex; gap:var(--ui-gap); align-items:center; }
+.ui-col{ display:flex; flex-direction:column; gap:var(--ui-gap); }
+.ui-kv{ display:grid; grid-template-columns:auto 1fr auto; column-gap:10px; row-gap:5px; align-items:baseline; font-size:9px; }
+.ui-kv .v{ justify-self:end; }
+
+.ui-btn, .ui-select, .ui-input, select.ui-select, button.ui-btn, input.ui-input {
+  appearance:none;
+  -webkit-appearance:none;
+  border-radius:0;
+  border:4px solid var(--ui-border-dark);
+  background: linear-gradient(var(--ui-fill-1), var(--ui-fill-2));
+  color:var(--ui-text);
+  text-shadow:1px 1px 0 var(--ui-text-shadow);
+  padding:6px 8px;
+  font-size:9px;
+  line-height:1.05;
+  width:100%;
+  box-shadow:none;
+}
+
+.ui-select{
+  padding-right:22px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ui-text) 50%),
+    linear-gradient(135deg, var(--ui-text) 50%, transparent 50%),
+    linear-gradient(var(--ui-fill-1), var(--ui-fill-2));
+  background-position:
+    calc(100% - 13px) 50%,
+    calc(100% - 8px) 50%,
+    0 0;
+  background-size:5px 5px,5px 5px,100% 100%;
+  background-repeat:no-repeat;
+}
+
+.ui-btn:focus-visible,
+.ui-select:focus-visible,
+.ui-input:focus-visible,
+.ui-focus{
+  outline:3px solid #f2d200;
+  outline-offset:2px;
+}
+
+.screen{ position:absolute; inset:8px; display:none; pointer-events:all; }
+.screen.active{ display:block; }
+
+#hud{ position:absolute; inset:0; pointer-events:none; }
+#hud.hidden{ display:none; }
+#party,#hotbar,#hintLog,#bossWidget,#minimap,#debug{ position:absolute; font-size:8px; pointer-events:none; }
+#party{ top:6px; left:6px; width:170px; }
+#hotbar{ bottom:6px; left:120px; width:240px; }
+#hintLog{ top:6px; right:6px; width:170px; }
+#bossWidget{ top:76px; right:6px; width:170px; }
+#minimap{ bottom:6px; right:6px; width:110px; height:78px; }
+#debug{ bottom:6px; left:6px; width:220px; }
+
+#pauseMenu{ position:absolute; left:170px; top:84px; width:140px; pointer-events:all; }
+#pauseMenu.hidden{ display:none; }
+
+.confirm-overlay{ position:absolute; inset:0; background:rgba(2,6,20,.55); display:grid; place-items:center; pointer-events:all; }
+.confirm-overlay.hidden{ display:none; }
+.confirm-dialog{ display:grid; grid-template-columns:auto auto; gap:8px; }
+.confirm-message{ grid-column:1/span 2; }
+.confirm-portraits{ display:grid; grid-template-rows:auto auto; gap:6px; justify-items:center; }
+.confirm-portrait{ width:24px; height:24px; transform:scale(.94); border:2px solid transparent; }
+.confirm-portrait.selected{ outline:3px solid #f2d200; outline-offset:2px; transform:scale(1); }
+.confirm-portrait.selected.breathe{ animation: portrait-breathe .143s steps(1,end) infinite alternate; }
+@keyframes portrait-breathe{ from{transform:scale(1)} to{transform:scale(1.06)} }
+.confirm-buttons{ display:grid; grid-template-rows:auto auto; gap:6px; }
+
+#lobbyRoster{ min-height:96px; white-space:pre-line; font-size:8px; }

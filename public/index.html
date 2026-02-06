@@ -1,0 +1,111 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Silver Moon</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="ui-theme.css" />
+</head>
+<body class="ui-root">
+  <canvas id="game"></canvas>
+
+  <div id="uiScale" class="ui-scale">
+    <div id="uiInternal" class="ui-internal">
+      <div id="ui">
+        <div id="screen-play" class="screen active ui-panel ui-text">
+          <div class="ui-row">
+            <div class="ui-panel ui-subpanel" style="width:110px;height:40px;display:flex;align-items:center;justify-content:center;">(sprite)</div>
+            <div class="ui-panel ui-subpanel" style="flex:1;display:flex;align-items:center;">Silver Moon</div>
+          </div>
+          <div class="ui-col" style="margin-top:8px;">
+            <button class="ui-btn" data-mode="solo">Play Solo</button>
+            <button class="ui-btn" data-mode="host">Host</button>
+            <div class="ui-row">
+              <input id="joinCode" class="ui-input" placeholder="Lobby code" maxlength="5" />
+              <button class="ui-btn" data-mode="join">Join</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="screen-setup" class="screen ui-panel ui-text">
+          <div class="ui-row">
+            <div class="ui-panel ui-subpanel" style="width:210px;">Dungeon Select</div>
+            <div class="ui-panel ui-subpanel" style="flex:1;">Loadout Status</div>
+          </div>
+
+          <div class="ui-row" style="margin-top:8px; align-items:stretch;">
+            <div class="ui-panel" style="width:210px;">
+              <select id="dungeonSelect" class="ui-select"></select>
+              <div style="height:8px"></div>
+              <select id="difficultySelect" class="ui-select">
+                <option>relaxed</option><option selected>standard</option><option>harsh</option>
+              </select>
+              <div style="height:8px"></div>
+              <button id="startBtn" class="ui-btn">Continue</button>
+              <button id="optionsBtn" class="ui-btn">Options</button>
+            </div>
+
+            <div class="ui-panel" style="flex:1;">
+              <div class="ui-row" style="align-items:stretch;">
+                <div id="loadoutPortraitPanel" class="ui-panel ui-subpanel" style="width:92px;height:92px;padding:0;display:flex;align-items:center;justify-content:center;">
+                  <canvas id="loadoutPortrait" width="80" height="80" style="image-rendering:pixelated;"></canvas>
+                </div>
+                <div class="ui-panel ui-subpanel" style="flex:1;">
+                  <div class="ui-kv" id="loadoutCoreStats"></div>
+                </div>
+                <div class="ui-panel ui-subpanel" style="width:140px;">
+                  <div class="ui-kv" id="loadoutBattleStats"></div>
+                </div>
+              </div>
+              <div style="height:8px"></div>
+              <select id="avatarSelect" class="ui-select"></select>
+              <div style="height:8px"></div>
+              <select id="djinnSelect" class="ui-select" multiple size="6"></select>
+            </div>
+          </div>
+        </div>
+
+        <div id="screen-lobby" class="screen ui-panel ui-text">
+          <div class="ui-row">
+            <div class="ui-panel ui-subpanel" style="width:180px;">Lobby code: <b id="lobbyCodeDisplay">----</b></div>
+            <div id="lobbyRole" class="ui-panel ui-subpanel" style="flex:1;"></div>
+          </div>
+          <div id="lobbyRoster" class="ui-panel" style="margin-top:8px;"></div>
+          <div class="ui-row" style="margin-top:8px;">
+            <button id="readyBtn" class="ui-btn">Toggle Ready</button>
+            <button id="hostStartBtn" class="ui-btn">Host Start Dungeon Run</button>
+          </div>
+          <div id="lobbyHint" class="ui-small">Late join policy: players joining after run start become spectators.</div>
+        </div>
+
+        <div id="screen-options" class="screen ui-panel ui-text">
+          <div class="ui-panel ui-subpanel">Options</div>
+          <div class="ui-col" style="margin-top:8px;">
+            <label class="ui-small">Master Volume <input type="range" min="0" max="100" value="70" /></label>
+            <label class="ui-small">Ping Color <input type="color" value="#00ffcc" /></label>
+            <button id="closeOptions" class="ui-btn">Back</button>
+          </div>
+        </div>
+
+        <div id="hud" class="hidden">
+          <div id="party" class="ui-subpanel ui-text"></div>
+          <div id="hotbar" class="ui-subpanel ui-text"></div>
+          <div id="hintLog" class="ui-subpanel ui-text"></div>
+          <div id="bossWidget" class="ui-subpanel ui-text"></div>
+          <div id="minimap" class="ui-subpanel ui-text"></div>
+          <div id="debug" class="ui-subpanel ui-text"></div>
+          <div id="pauseMenu" class="hidden ui-panel ui-text">
+            <button class="ui-btn" data-pause="resume">Resume</button>
+            <button class="ui-btn" data-pause="restart-room">Restart Room</button>
+            <button class="ui-btn" data-pause="abandon-run">Abandon Run</button>
+          </div>
+          <div id="confirmOverlay" class="confirm-overlay hidden ui-text"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

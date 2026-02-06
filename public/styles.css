@@ -1,0 +1,3 @@
+body { margin: 0; overflow: hidden; background: #0f1220; }
+#game { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; z-index: 0; }
+#ui { position: absolute; inset: 0; pointer-events: none; }
